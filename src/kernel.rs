@@ -4,10 +4,15 @@
 #![no_main] // disable all Rust-level entry points
 
 use core::panic::PanicInfo;
+use core::arch::global_asm;
+
+global_asm!(include_str!("start.s"), options(raw));
 
 mod vga_buffer;
 mod init;
 mod gdt;
+mod port;
+mod interrupts;
 
 /// This function is called on panic.
 #[panic_handler]

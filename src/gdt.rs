@@ -135,16 +135,16 @@ impl GDT {
     }
 
     /// return the offset of the kernel code segment inside the table
-    pub fn get_kernel_code_segment_offset(&self) -> u32 {
-        (&self.k_code_sd as *const SegmentDescriptor) as u32 - (self as *const GDT) as u32
+    pub fn get_kernel_code_segment_offset(&self) -> u16 {
+        (&self.k_code_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
     }
-    pub fn get_kernel_data_segment_offset(&self) -> u32 {
-        (&self.k_data_sd as *const SegmentDescriptor) as u32 - (self as *const GDT) as u32
+    pub fn get_kernel_data_segment_offset(&self) -> u16 {
+        (&self.k_data_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
     }
-    pub fn get_user_code_segment_offset(&self) -> u32 {
-        (&self.u_code_sd as *const SegmentDescriptor) as u32 - (self as *const GDT) as u32
+    pub fn get_user_code_segment_offset(&self) -> u16 {
+        (&self.u_code_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
     }
-    pub fn get_user_data_segment_offset(&self) -> u32 {
-        (&self.u_code_sd as *const SegmentDescriptor) as u32 - (self as *const GDT) as u32
+    pub fn get_user_data_segment_offset(&self) -> u16 {
+        (&self.u_code_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
     }
 }

@@ -1,4 +1,4 @@
-.intel_syntax noprefix
+//.intel_syntax noprefix
 
 // external function, start of the kernel.c
 .extern kernel_main
@@ -26,13 +26,14 @@
     // C code need a stack
     .align 16 // WHY?
     stack_bottom:
-        .skip 4096 // 4K
+//        .skip 1048576 // 1MB
+        .skip 4096 // 1MB
     stack_top:
 
 .section .text
     start: 
-        mov esp, stack_top
-        //mov esp, stack_top
+        lea esp, stack_top
+        //mov $stack_top, %esp
 
         // now the environment is ready, start the code
         call kernel_main
@@ -50,13 +51,6 @@
         MOV   [gdtr + 2], EAX
         LGDT  [gdtr]
         RET
-    //set_gdt:
-    //    mov 4(%esp), %ax
-    //    mov %ax, $gdtr
-    //    mov 8(%esp), %eax
-    //    mov %eax, $gdtr+2
-    //    lgdt $gdtr
-    //    ret
 
 .section .data
     gdtr:
