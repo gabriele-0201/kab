@@ -1,5 +1,7 @@
+use super::vga_buffer::println;
 use super::gdt::GDT;
 use super::port::Port8Bit;
+use core::arch::asm;
 
 extern {
     fn interruptIgnore();
@@ -42,16 +44,23 @@ impl GateDescritor {
     }
 }
 
+#[repr(C)]
+struct IDTDescriptor {
+    size: u16,
+    ptr: *const GateDescritor
+}
+
 struct IDT {
     idt: [GateDescritor; 256],
     // used because the IRQ start from 0 but in the cpu the relative entry
     // int he idt is offsetted by a custom value
-    hw_interrupt_offset: u32, 
+    hw_interrupt_offset: u16, 
     pic_master_command: Port8Bit,
     pic_master_data: Port8Bit,
     pic_slave_command: Port8Bit,
     pic_slave_data: Port8Bit,
 }
+
 
 // IDK if is usefull to update the IDT onoging or is fixed after initialization
 impl IDT {
@@ -85,16 +94,27 @@ impl IDT {
         idt_struct.pic_master_data.write(0x00);
         idt_struct.pic_slave_data.write(0x00);
 
-        
-        // Load the idt
-        // AAAHHHH INLINE ASSMBLY
-        
-
         // return idt
         idt_struct
     }
+
+    pub fn load(&self) {
+        
+        // Load the idt
+        // AAAHHHH INLINE ASSMBLY
+        unsafe {
+            let idt_descriptor = IDTDescriptor {
+                size: core::mem::size_of::<GateDescritor>() as u16,
+                ptr: &self.idt[0] as *const GateDescritor
+            };
+            asm!("lidt [{}]", in(reg) &idt_descriptor , options(readonly, nostack, preserves_flags));
+        }
+        
+    }
+
 }
 
-extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) {
-    
+extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) -> u32 {
+    println!("Interrupt: {}", interrupt_number);
+    esp
 }
