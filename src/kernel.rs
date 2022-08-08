@@ -7,6 +7,7 @@ use core::panic::PanicInfo;
 use core::arch::global_asm;
 
 global_asm!(include_str!("start.s"), options(raw));
+global_asm!(include_str!("interrupt_handlers.s"), options(raw));
 
 mod vga_buffer;
 mod init;
@@ -53,7 +54,17 @@ pub extern "C" fn kernel_main() -> ! {
     
     // All of the following code should finish in some init wrapper
     let gdt = gdt::GDT::new(); 
-    gdt.set();
+    gdt.load();
+
+    println!("GDT loaded!");
+
+    let idt = interrupts::IDT::new(0x20, &gdt);
+    idt.load();
+
+    println!("IDT loaded!");
+
+    //println!("Activation interrupts!");
+    //interrupts::activate();
 
     loop {}
 }

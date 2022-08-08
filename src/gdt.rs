@@ -128,9 +128,8 @@ impl GDT {
         }
     }
 
-    pub fn set(&self) {
+    pub fn load(&self) {
         // This function should be load the GDT in Protected and Flat Mode
-        println!("structure: {:?}", self);
         unsafe { set_gdt(core::mem::size_of::<GDT>() as u32, self); };
     }
 

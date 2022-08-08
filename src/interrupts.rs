@@ -6,10 +6,12 @@ use core::arch::asm;
 extern {
     fn interruptIgnore();
     fn handleInterruptRequest0x00();
+    fn handleInterruptRequest0x01();
+    fn handleException0x00();
 }
 
 /// This gate could be Interrupt Gate or Trap Gate 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(C)]
 struct GateDescritor {
     low_ptr: u16,
@@ -50,7 +52,7 @@ struct IDTDescriptor {
     ptr: *const GateDescritor
 }
 
-struct IDT {
+pub struct IDT {
     idt: [GateDescritor; 256],
     // used because the IRQ start from 0 but in the cpu the relative entry
     // int he idt is offsetted by a custom value
@@ -75,7 +77,13 @@ impl IDT {
             pic_slave_data: Port8Bit::new(0xA1)
         };
 
-        idt_struct.idt[0].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        println!("{}: {:?}", 0, idt_struct.idt[0]);
+        println!("{}: {:?}", 1, idt_struct.idt[1]);
+
+        idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
+
+        idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
 
         // Comunicate with PIC master and slave
         idt_struct.pic_master_command.write(0x11);
@@ -101,20 +109,26 @@ impl IDT {
     pub fn load(&self) {
         
         // Load the idt
-        // AAAHHHH INLINE ASSMBLY
         unsafe {
             let idt_descriptor = IDTDescriptor {
-                size: core::mem::size_of::<GateDescritor>() as u16,
+                size: ((core::mem::size_of::<GateDescritor>() * self.idt.len()) - 1) as u16,
                 ptr: &self.idt[0] as *const GateDescritor
             };
             asm!("lidt [{}]", in(reg) &idt_descriptor , options(readonly, nostack, preserves_flags));
         }
         
     }
-
 }
 
-extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) -> u32 {
+pub fn activate() {
+    unsafe {
+        // STI sets the interrupt flag (IF) in the EFLAGS register
+        asm!("sti" , options(readonly, nostack, preserves_flags));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) -> u32 {
     println!("Interrupt: {}", interrupt_number);
     esp
 }
