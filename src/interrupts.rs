@@ -13,6 +13,7 @@ extern {
 /// This gate could be Interrupt Gate or Trap Gate 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
+#[repr(align(16))]
 struct GateDescritor {
     low_ptr: u16,
     segment_selector: u16,
@@ -36,6 +37,7 @@ impl GateDescritor {
         }
     }
 
+    /* using an array with the default initialization will cause weird stuff
     pub fn update(&mut self, ptr: unsafe extern "C" fn(), segment_selector: u16, ring: u8, descriptor_type: u8) {
 
         self.low_ptr = ((ptr as *const fn()) as u32 & 0xFFFF) as u16;
@@ -44,14 +46,17 @@ impl GateDescritor {
         self.high_ptr = (((ptr as *const fn()) as u32 >> 16) & 0xFFFF) as u16;
           
     }
+    */
 }
 
 #[repr(C)]
 struct IDTDescriptor {
     size: u16,
-    ptr: *const GateDescritor
+    //ptr: *const GateDescritor
+    ptr: u32
 }
 
+#[repr(C)]
 pub struct IDT {
     idt: [GateDescritor; 256],
     // used because the IRQ start from 0 but in the cpu the relative entry
@@ -68,6 +73,7 @@ pub struct IDT {
 impl IDT {
     pub fn new(interrupt_offset: u16, gdt: &GDT) -> Self {
         let code_segment = gdt.get_kernel_code_segment_offset();
+
         let mut idt_struct = IDT {
             idt: [GateDescritor::new(interruptIgnore, code_segment, 0, 0xE); 256],
             hw_interrupt_offset: interrupt_offset,
@@ -77,13 +83,18 @@ impl IDT {
             pic_slave_data: Port8Bit::new(0xA1)
         };
 
-        println!("{}: {:?}", 0, idt_struct.idt[0]);
-        println!("{}: {:?}", 1, idt_struct.idt[1]);
+        //println!("{}: {:?}", 0, idt_struct.idt[0]);
+        //println!("len idt: {}", idt_struct.idt.len());
+        //println!("{}: {:?}", 1, idt_struct.idt[1]);
+        //println!("{}: {:?}", 2, idt_struct.idt[2]);
 
-        idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
+        //idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
+        idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
 
-        idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
-        idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
+        //idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        idt_struct.idt[(interrupt_offset + 0x00) as usize]= GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        //idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
+        idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
 
         // Comunicate with PIC master and slave
         idt_struct.pic_master_command.write(0x11);
@@ -112,8 +123,9 @@ impl IDT {
         unsafe {
             let idt_descriptor = IDTDescriptor {
                 size: ((core::mem::size_of::<GateDescritor>() * self.idt.len()) - 1) as u16,
-                ptr: &self.idt[0] as *const GateDescritor
-            };
+                //ptr: &self.idt[0] as *const GateDescritor
+                ptr: &self.idt[0] as *const _ as u32
+            }; 
             asm!("lidt [{}]", in(reg) &idt_descriptor , options(readonly, nostack, preserves_flags));
         }
         

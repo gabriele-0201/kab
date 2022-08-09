@@ -59,7 +59,7 @@ pub extern "C" fn kernel_main() -> ! {
     println!("GDT loaded!");
 
     let idt = interrupts::IDT::new(0x20, &gdt);
-    idt.load();
+    //idt.load();
 
     println!("IDT loaded!");
 
