@@ -4,17 +4,17 @@ use super::port::Port8Bit;
 use core::arch::asm;
 
 extern {
-    fn interruptIgnore();
-    fn handleInterruptRequest0x00();
-    fn handleInterruptRequest0x01();
-    fn handleException0x00();
+    pub fn interruptIgnore();
+    pub fn handleInterruptRequest0x00();
+    pub fn handleInterruptRequest0x01();
+    pub fn handleException0x00();
 }
 
 /// This gate could be Interrupt Gate or Trap Gate 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
-#[repr(align(16))]
-struct GateDescritor {
+//#[repr(align(16))] this fuck everything, why???
+pub/*test*/ struct GateDescritor {
     low_ptr: u16,
     segment_selector: u16,
     reserved: u8,
@@ -58,21 +58,23 @@ struct IDTDescriptor {
 
 #[repr(C)]
 pub struct IDT {
-    idt: [GateDescritor; 256],
+    pub idt: [GateDescritor; 256],
     // used because the IRQ start from 0 but in the cpu the relative entry
     // int he idt is offsetted by a custom value
-    hw_interrupt_offset: u16, 
-    pic_master_command: Port8Bit,
-    pic_master_data: Port8Bit,
-    pic_slave_command: Port8Bit,
-    pic_slave_data: Port8Bit,
+    pub hw_interrupt_offset: u16, 
+    pub pic_master_command: Port8Bit,
+    pub pic_master_data: Port8Bit,
+    pub pic_slave_command: Port8Bit,
+    pub pic_slave_data: Port8Bit,
 }
 
 
 // IDK if is usefull to update the IDT onoging or is fixed after initialization
 impl IDT {
-    pub fn new(interrupt_offset: u16, gdt: &GDT) -> Self {
+    pub fn new(interrupt_offset: u16, gdt: &GDT) /*-> Self*/ {
         let code_segment = gdt.get_kernel_code_segment_offset();
+
+        println!("Before the IDT construct");
 
         let mut idt_struct = IDT {
             idt: [GateDescritor::new(interruptIgnore, code_segment, 0, 0xE); 256],
@@ -83,40 +85,48 @@ impl IDT {
             pic_slave_data: Port8Bit::new(0xA1)
         };
 
-        //println!("{}: {:?}", 0, idt_struct.idt[0]);
+        for i in 0..255 {
+            idt_struct.idt[i] = GateDescritor::new(interruptIgnore, code_segment, 0, 0xE);
+        }
+
+        println!("After the IDT construct");
+
+        println!("{}: {:?}", 0, idt_struct.idt[0]);
+        //println!("somethig after the print of the first entry");
         //println!("len idt: {}", idt_struct.idt.len());
         //println!("{}: {:?}", 1, idt_struct.idt[1]);
         //println!("{}: {:?}", 2, idt_struct.idt[2]);
 
         //idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
-        idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
+        //idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
 
-        //idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
-        idt_struct.idt[(interrupt_offset + 0x00) as usize]= GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);
-        //idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
-        idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
+        ////idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        //idt_struct.idt[(interrupt_offset + 0x00) as usize]= GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        ////idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
+        //idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
 
-        // Comunicate with PIC master and slave
-        idt_struct.pic_master_command.write(0x11);
-        idt_struct.pic_slave_command.write(0x11);
+        //// Comunicate with PIC master and slave
+        //idt_struct.pic_master_command.write(0x11);
+        //idt_struct.pic_slave_command.write(0x11);
 
-        // remap
-        idt_struct.pic_master_data.write(interrupt_offset as u8);
-        idt_struct.pic_slave_data.write((interrupt_offset+8) as u8);
+        //// remap
+        //idt_struct.pic_master_data.write(interrupt_offset as u8);
+        //idt_struct.pic_slave_data.write((interrupt_offset+8) as u8);
 
-        idt_struct.pic_master_data.write(0x04);
-        idt_struct.pic_slave_data.write(0x02);
+        //idt_struct.pic_master_data.write(0x04);
+        //idt_struct.pic_slave_data.write(0x02);
 
-        idt_struct.pic_master_data.write(0x01);
-        idt_struct.pic_slave_data.write(0x01);
+        //idt_struct.pic_master_data.write(0x01);
+        //idt_struct.pic_slave_data.write(0x01);
 
-        idt_struct.pic_master_data.write(0x00);
-        idt_struct.pic_slave_data.write(0x00);
+        //idt_struct.pic_master_data.write(0x00);
+        //idt_struct.pic_slave_data.write(0x00);
 
         // return idt
-        idt_struct
+        //idt_struct
     }
 
+    /*
     pub fn load(&self) {
         
         // Load the idt
@@ -128,8 +138,8 @@ impl IDT {
             }; 
             asm!("lidt [{}]", in(reg) &idt_descriptor , options(readonly, nostack, preserves_flags));
         }
-        
     }
+    */
 }
 
 pub fn activate() {
