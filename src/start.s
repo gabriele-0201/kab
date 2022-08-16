@@ -67,15 +67,15 @@
         jmp interrupt_first_handler
     
     handleInterruptRequest0x00:
-        //mov byte ptr [interruptnumber], 0x20
-        jmp interrupt_first_handler
+        mov byte ptr [interruptnumber], 0x20
+        call interrupt_first_handler
 
     handleInterruptRequest0x01:
         mov byte ptr [interruptnumber], 0x21
         jmp interrupt_first_handler
     
     interrupt_first_handler:
-       //pushad // -> 32 bit general purpose registers; pusha -> 16 bit 
+       pushad // -> 32 bit general purpose registers; pusha -> 16 bit 
     
        push esp
        push [interruptnumber]
