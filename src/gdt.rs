@@ -106,7 +106,7 @@ impl HighLimitAndFlags {
 pub struct GDT {
     // SD = SegmentDescriptor
     null_sd: SegmentDescriptor,
-    unused_sd: SegmentDescriptor,
+    //unused_sd: SegmentDescriptor,
     k_code_sd: SegmentDescriptor, // k = kernel
     k_data_sd: SegmentDescriptor,
     u_code_sd: SegmentDescriptor, // u = user
@@ -119,11 +119,11 @@ impl GDT {
     pub fn new() -> Self {
         GDT {
             null_sd: SegmentDescriptor::new(0, 0 ,0),
-            unused_sd: SegmentDescriptor::new(0, 0, 0),
-            k_code_sd: SegmentDescriptor::new(0, 0x000FFFFF, KERNEL_CODE_SEGMENT_FLAGS), // size = 64KiB
-            k_data_sd: SegmentDescriptor::new(0, 0x000FFFFF, KERNEL_DATA_SEGMENT_FLAGS), // size = 64KiB
-            u_code_sd: SegmentDescriptor::new(0, 0x000FFFFF, USER_CODE_SEGMENT_FLAGS), // size = 64KiB
-            u_data_sd: SegmentDescriptor::new(0, 0x000FFFFF, USER_DATA_SEGMENT_FLAGS), // size = 64KiB
+            //unused_sd: SegmentDescriptor::new(0, 0, 0),
+            k_code_sd: SegmentDescriptor::new(0, 0x00FFFFFF, KERNEL_CODE_SEGMENT_FLAGS), 
+            k_data_sd: SegmentDescriptor::new(0, 0x00FFFFFF, KERNEL_DATA_SEGMENT_FLAGS),
+            u_code_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_CODE_SEGMENT_FLAGS), 
+            u_data_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_DATA_SEGMENT_FLAGS), 
             //task_state_sd: SegmentDescriptor::new((64*1024*1024 * 4) + 1, 0, TASK_STATE_SEGMENT_FLAGS), // size = 64KiB
         }
     }
@@ -135,7 +135,7 @@ impl GDT {
 
     /// return the offset of the kernel code segment inside the table
     pub fn get_kernel_code_segment_offset(&self) -> u16 {
-        (&self.k_code_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
+        ((&self.k_code_sd as *const SegmentDescriptor) as u32 - (self as *const GDT) as u32) as u16
     }
     pub fn get_kernel_data_segment_offset(&self) -> u16 {
         (&self.k_data_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16

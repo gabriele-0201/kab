@@ -7,7 +7,7 @@ use core::panic::PanicInfo;
 use core::arch::global_asm;
 
 global_asm!(include_str!("start.s"), options(raw));
-global_asm!(include_str!("interrupt_handlers.s"), options(raw));
+//global_asm!(include_str!("interrupt_handlers.s"), options(raw));
 
 mod vga_buffer;
 mod init;
@@ -58,31 +58,13 @@ pub extern "C" fn kernel_main() -> ! {
 
     println!("GDT loaded!");
 
-    //let idt = interrupts::IDT::new(0x20, &gdt);
-    //interrupts::IDT::new(0x20, &gdt);
-    //idt.load();
-
-    //TEST
-    let mut idt_struct = interrupts::IDT {
-        idt: [interrupts::GateDescritor::new(interrupts::interruptIgnore, gdt.get_kernel_code_segment_offset(), 0, 0xE); 256],
-        hw_interrupt_offset: 0x20,
-        pic_master_command: port::Port8Bit::new(0x20),
-        pic_master_data: port::Port8Bit::new(0x21),
-        pic_slave_command: port::Port8Bit::new(0xA0),
-        pic_slave_data: port::Port8Bit::new(0xA1)
-    };
-
-    println!("After the IDT construct");
-
-    println!("{}: {:?}", 0, idt_struct.idt[0]);
-    println!("somethig after the print of the first entry");
-    //println!("len idt: {}", idt_struct.idt.len());
-    //println!("{}: {:?}", 1, idt_struct.idt[1]);
+    let idt = interrupts::IDT::new(0x20, &gdt);
+    idt.load();
 
     println!("IDT loaded!");
 
-    //println!("Activation interrupts!");
-    //interrupts::activate();
+    println!("Activation interrupts!");
+    interrupts::enable();
 
     loop {}
 }

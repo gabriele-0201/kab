@@ -11,10 +11,10 @@ extern {
 }
 
 /// This gate could be Interrupt Gate or Trap Gate 
+/// Each entry have 64bit
 #[derive(Clone, Copy, Debug)]
-#[repr(C)]
-//#[repr(align(16))] this fuck everything, why???
-pub/*test*/ struct GateDescritor {
+#[repr(C, packed)]
+struct GateDescritor {
     low_ptr: u16,
     segment_selector: u16,
     reserved: u8,
@@ -29,11 +29,11 @@ impl GateDescritor {
     /// descriptor_type: descriptor of the entry
     pub fn new(ptr: unsafe extern "C" fn(), segment_selector: u16, ring: u8, descriptor_type: u8) -> Self {
         GateDescritor {
-            low_ptr: ((ptr as *const fn()) as u32 & 0xFFFF) as u16,
+            low_ptr: ((ptr as *const unsafe extern "C" fn()) as u32 & 0xFFFF) as u16,
             segment_selector,
             reserved: 0,
             access_type: 0x80 /* = IDT_ENTRY_PRESENT*/ | ((ring & 3) << 5) | descriptor_type,
-            high_ptr: (((ptr as *const fn()) as u32 >> 16) & 0xFFFF) as u16,
+            high_ptr: (((ptr as *const unsafe extern "C" fn()) as u32 >> 16) & 0xFFFF) as u16,
         }
     }
 
@@ -49,32 +49,30 @@ impl GateDescritor {
     */
 }
 
-#[repr(C)]
+#[repr(C, packed(2))]
 struct IDTDescriptor {
     size: u16,
-    //ptr: *const GateDescritor
-    ptr: u32
+    ptr: *const GateDescritor
 }
 
-#[repr(C)]
+//#[repr(C)]
+#[repr(align(16))]
 pub struct IDT {
-    pub idt: [GateDescritor; 256],
+    idt: [GateDescritor; 256],
     // used because the IRQ start from 0 but in the cpu the relative entry
     // int he idt is offsetted by a custom value
-    pub hw_interrupt_offset: u16, 
-    pub pic_master_command: Port8Bit,
-    pub pic_master_data: Port8Bit,
-    pub pic_slave_command: Port8Bit,
-    pub pic_slave_data: Port8Bit,
+    hw_interrupt_offset: u16, 
+    pic_master_command: Port8Bit,
+    pic_master_data: Port8Bit,
+    pic_slave_command: Port8Bit,
+    pic_slave_data: Port8Bit,
 }
 
 
 // IDK if is usefull to update the IDT onoging or is fixed after initialization
 impl IDT {
-    pub fn new(interrupt_offset: u16, gdt: &GDT) /*-> Self*/ {
+    pub fn new(interrupt_offset: u16, gdt: &GDT) -> Self {
         let code_segment = gdt.get_kernel_code_segment_offset();
-
-        println!("Before the IDT construct");
 
         let mut idt_struct = IDT {
             idt: [GateDescritor::new(interruptIgnore, code_segment, 0, 0xE); 256],
@@ -88,66 +86,73 @@ impl IDT {
         for i in 0..255 {
             idt_struct.idt[i] = GateDescritor::new(interruptIgnore, code_segment, 0, 0xE);
         }
-
-        println!("After the IDT construct");
-
-        println!("{}: {:?}", 0, idt_struct.idt[0]);
-        //println!("somethig after the print of the first entry");
-        //println!("len idt: {}", idt_struct.idt.len());
-        //println!("{}: {:?}", 1, idt_struct.idt[1]);
-        //println!("{}: {:?}", 2, idt_struct.idt[2]);
-
+        
         //idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
-        //idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
+        idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
 
         ////idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
-        //idt_struct.idt[(interrupt_offset + 0x00) as usize]= GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        idt_struct.idt[(interrupt_offset + 0x00) as usize] = GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);
         ////idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
-        //idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
+        idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
+
+        println!("entry 0x00: {:?}", idt_struct.idt[0x00]);
+        println!("entry 0x01: {:?}", idt_struct.idt[0x01]);
+        println!("entry 0x20: {:?}", idt_struct.idt[0x20]);
+        println!("entry 0x21: {:?}", idt_struct.idt[0x21]);
 
         //// Comunicate with PIC master and slave
-        //idt_struct.pic_master_command.write(0x11);
-        //idt_struct.pic_slave_command.write(0x11);
+        idt_struct.pic_master_command.write(0x11);
+        idt_struct.pic_slave_command.write(0x11);
 
         //// remap
-        //idt_struct.pic_master_data.write(interrupt_offset as u8);
-        //idt_struct.pic_slave_data.write((interrupt_offset+8) as u8);
+        idt_struct.pic_master_data.write(interrupt_offset as u8);
+        idt_struct.pic_slave_data.write((interrupt_offset+8) as u8);
 
-        //idt_struct.pic_master_data.write(0x04);
-        //idt_struct.pic_slave_data.write(0x02);
+        idt_struct.pic_master_data.write(0x04);
+        idt_struct.pic_slave_data.write(0x02);
 
-        //idt_struct.pic_master_data.write(0x01);
-        //idt_struct.pic_slave_data.write(0x01);
+        idt_struct.pic_master_data.write(0x01);
+        idt_struct.pic_slave_data.write(0x01);
 
-        //idt_struct.pic_master_data.write(0x00);
-        //idt_struct.pic_slave_data.write(0x00);
+        idt_struct.pic_master_data.write(0x00);
+        idt_struct.pic_slave_data.write(0x00);
 
         // return idt
-        //idt_struct
+        idt_struct
     }
 
-    /*
     pub fn load(&self) {
         
         // Load the idt
         unsafe {
             let idt_descriptor = IDTDescriptor {
                 size: ((core::mem::size_of::<GateDescritor>() * self.idt.len()) - 1) as u16,
-                //ptr: &self.idt[0] as *const GateDescritor
-                ptr: &self.idt[0] as *const _ as u32
+                ptr: &self.idt[0] as *const GateDescritor
             }; 
             asm!("lidt [{}]", in(reg) &idt_descriptor , options(readonly, nostack, preserves_flags));
         }
     }
-    */
 }
 
-pub fn activate() {
+/// Enable interrupts.
+/// This is a wrapper around the `sti` instruction.
+#[inline]
+pub fn enable() {
     unsafe {
-        // STI sets the interrupt flag (IF) in the EFLAGS register
-        asm!("sti" , options(readonly, nostack, preserves_flags));
+        asm!("sti", options(nomem, nostack));
+    }
+    println!("Activated interrupts!");
+}
+
+/// Disable interrupts.
+/// This is a wrapper around the `cli` instruction.
+#[inline]
+pub fn disable() {
+    unsafe {
+        asm!("cli", options(nomem, nostack));
     }
 }
+
 
 #[no_mangle]
 pub extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) -> u32 {

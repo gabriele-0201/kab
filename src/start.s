@@ -7,6 +7,15 @@
 .global start
 .global set_gdt
 
+// TEST
+.extern handle_interrupt
+.global handleException0x00
+.global handleInterruptRequest0x00
+.global handleInterruptRequest0x01
+.global interruptIgnore
+.set IRQ_BASE, 0x20
+// END TEST
+
 // the bootloader GRUB need some standard basic info
 // the standard used is 'Multiboot'
 // the following constants will define the Multiboot Header
@@ -26,8 +35,8 @@
     // C code need a stack
     .align 16 // WHY?
     stack_bottom:
-//        .skip 1048576 // 1MB
-        .skip 4096 // 1MB
+        .skip 1048576 * 2 // 2MB
+//        .skip 4096 // 1MB
     stack_top:
 
 .section .text
@@ -52,7 +61,44 @@
         LGDT  [gdtr]
         RET
 
+    // TEST 
+    handleException0x00:
+        mov byte ptr [interruptnumber], 0x00
+        jmp interrupt_first_handler
+    
+    handleInterruptRequest0x00:
+        //mov byte ptr [interruptnumber], 0x20
+        jmp interrupt_first_handler
+
+    handleInterruptRequest0x01:
+        mov byte ptr [interruptnumber], 0x21
+        jmp interrupt_first_handler
+    
+    interrupt_first_handler:
+       //pushad // -> 32 bit general purpose registers; pusha -> 16 bit 
+    
+       push esp
+       push [interruptnumber]
+    
+       call handle_interrupt 
+       // the return value of the called function will go on the stack
+       // the value will be the new stack pointer ?
+       // how manage the Istruction Register?
+       // maybe we will set it someway
+    
+       //add esp, 6 // ?? why 6 and not 5? 
+       mov esp, eax // set the new stack ptr
+    
+       popad 
+    
+    interruptIgnore:
+        iret // why this is translated to iretw??
+    // END TEST
+
 .section .data
     gdtr:
         .word 0 // For limit storage
         .long 0 // For base storage
+    // TEST
+    interruptnumber: .byte 0
+    // END TEST

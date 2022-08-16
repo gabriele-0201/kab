@@ -6,38 +6,64 @@
 // TODO find a solution to not duplicate this here and in the interrupts.rs
 .extern handle_interrupt
 
+.global handleException0x00
+.global andleInterruptRequest0x00
+.global handleInterruptRequest0x01
+
 .set IRQ_BASE, 0x20
 
 .section text
 
-    .macro HandleException num
-    .global handleException\num
-    handleException\num:
-        mov byte ptr [interruptnumber], \num
+    //.macro HandleException num
+    //.global handleException\num
+    //handleException\num:
+    //    mov byte ptr [interruptnumber], \num
+    //    jmp interrupt_first_handler
+    //.endm
+    //
+    //
+    //.macro HandleInterruptRequest num
+    //.global handleInterruptRequest\num
+    //handleInterruptRequest\num:
+    //    push eax
+
+    //    mov al, \num
+    //    add al, IRQ_BASE
+
+    //    //mov byte ptr [interruptnumber], \num + IRQ_BASE
+    //    mov byte ptr [interruptnumber], al
+
+    //    pop eax
+
+    //    jmp interrupt_first_handler
+    //.endm
+
+    //HandleException 0x00
+    //
+    //HandleInterruptRequest 0x00
+    //HandleInterruptRequest 0x01
+
+    // TEST WITHOUT MACRO
+    handleException0x00:
+        mov byte ptr [interruptnumber], 0x00
         jmp interrupt_first_handler
-    .endm
     
     
-    .macro HandleInterruptRequest num
-    .global handleInterruptRequest\num
-    handleInterruptRequest\num:
+    handleInterruptRequest0x00:
         push eax
-
-        mov al, \num
+        mov al, 0x00
         add al, IRQ_BASE
-
-        //mov byte ptr [interruptnumber], \num + IRQ_BASE
         mov byte ptr [interruptnumber], al
-
         pop eax
-
         jmp interrupt_first_handler
-    .endm
 
-    HandleException 0x00
-    
-    HandleInterruptRequest 0x00
-    HandleInterruptRequest 0x01
+    handleInterruptRequest0x01:
+        push eax
+        mov al, 0x01
+        add al, IRQ_BASE
+        mov byte ptr [interruptnumber], al
+        pop eax
+        jmp interrupt_first_handler
     
     interrupt_first_handler:
        pushad // -> 32 bit general purpose registers; pusha -> 16 bit 
