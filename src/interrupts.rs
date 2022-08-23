@@ -8,6 +8,7 @@ extern {
     pub fn handleInterruptRequest0x00();
     pub fn handleInterruptRequest0x01();
     pub fn handleException0x00();
+    pub fn handleException0x06();
 }
 
 /// This gate could be Interrupt Gate or Trap Gate 
@@ -89,6 +90,7 @@ impl IDT {
         
         //idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
         idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
+        idt_struct.idt[0x06] = GateDescritor::new(handleException0x06, code_segment, 0, 0xE);
 
         ////idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
         idt_struct.idt[(interrupt_offset + 0x00) as usize] = GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);

@@ -1,13 +1,14 @@
-// src/main.rs
-
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
 
+            
+//global_asm!(core::include_str!("start.s"), options(raw));
+//global_asm!(include_str!("interrupt_handlers.s"), options(raw));
+
+// src/main.rs
+
 use core::panic::PanicInfo;
 use core::arch::global_asm;
-
-global_asm!(include_str!("start.s"), options(raw));
-//global_asm!(include_str!("interrupt_handlers.s"), options(raw));
 
 mod vga_buffer;
 mod init;
@@ -23,6 +24,10 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 //static HELLO: &[u8] = b"CIAOOOOOOO";
+
+extern {
+    pub fn testJmpAfterGdt();
+}
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
@@ -57,6 +62,10 @@ pub extern "C" fn kernel_main() -> ! {
     gdt.load();
 
     println!("GDT loaded!");
+
+    unsafe {
+        testJmpAfterGdt();
+    }
 
     let idt = interrupts::IDT::new(0x20, &gdt);
     idt.load();

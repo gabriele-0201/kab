@@ -1,4 +1,4 @@
-use super::vga_buffer::println;
+use super::vga_buffer::{ println, print };
 
 const KERNEL_CODE_SEGMENT_FLAGS: u8 = 0x9A; // 10011010
 const KERNEL_DATA_SEGMENT_FLAGS: u8 = 0x92; // 10010010
@@ -9,6 +9,7 @@ const TASK_STATE_SEGMENT_FLAGS: u8 = 0xF2; // 11110010
 extern {
     // this is extern "C" unsafe
     fn set_gdt(limit: u32, base: *const GDT);
+    fn reloadSegments();
 }
 
 #[derive(Debug)]
@@ -109,9 +110,17 @@ pub struct GDT {
     //unused_sd: SegmentDescriptor,
     k_code_sd: SegmentDescriptor, // k = kernel
     k_data_sd: SegmentDescriptor,
-    u_code_sd: SegmentDescriptor, // u = user
-    u_data_sd: SegmentDescriptor,
+    //u_code_sd: SegmentDescriptor, // u = user
+    //u_data_sd: SegmentDescriptor,
     //task_state_sd: SegmentDescriptor,
+}
+
+#[repr(C, packed(2))]
+pub struct DescriptorTablePointer {
+    /// Size of the DT.
+    pub limit: u16,
+    /// Pointer to the memory region containing the DT.
+    pub base: *const GDT,
 }
 
 impl GDT {
@@ -122,15 +131,53 @@ impl GDT {
             //unused_sd: SegmentDescriptor::new(0, 0, 0),
             k_code_sd: SegmentDescriptor::new(0, 0x00FFFFFF, KERNEL_CODE_SEGMENT_FLAGS), 
             k_data_sd: SegmentDescriptor::new(0, 0x00FFFFFF, KERNEL_DATA_SEGMENT_FLAGS),
-            u_code_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_CODE_SEGMENT_FLAGS), 
-            u_data_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_DATA_SEGMENT_FLAGS), 
+            //u_code_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_CODE_SEGMENT_FLAGS), 
+            //u_data_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_DATA_SEGMENT_FLAGS), 
             //task_state_sd: SegmentDescriptor::new((64*1024*1024 * 4) + 1, 0, TASK_STATE_SEGMENT_FLAGS), // size = 64KiB
         }
     }
 
     pub fn load(&self) {
         // This function should be load the GDT in Protected and Flat Mode
-        unsafe { set_gdt(core::mem::size_of::<GDT>() as u32, self); };
+        //unsafe { set_gdt(core::mem::size_of::<GDT>() as u32, self); };
+        let gdt = DescriptorTablePointer {
+            //limit: core::mem::size_of::<GDT>() as u16,
+            limit: (3 * core::mem::size_of::<SegmentDescriptor>() - 1) as u16,
+            base: self
+        };
+        unsafe {
+            core::arch::asm!("lgdt [{}]", in(reg) &gdt, options(readonly, nostack, preserves_flags));
+            //reloadSegments();
+            Self::print_gdt();
+            Self::print_gdt();
+        }
+    }
+
+    /// Get the address of the current GDT.
+    #[no_mangle]
+    pub extern "C" fn print_gdt() {
+        let mut gdt: DescriptorTablePointer = DescriptorTablePointer {
+            limit: 0,
+            base: 0 as *const GDT
+        };
+        unsafe {
+            core::arch::asm!("sgdt [{}]", in(reg) &mut gdt, options(nostack, preserves_flags));
+
+            println!("Il limite dalla gdt e': {}", gdt.limit);
+            let mut counter = 0;
+            for i in 0..gdt.limit + 1 {
+
+                print!("{:02x}", *(gdt.base as *const u8).offset(i as isize));
+
+                counter += 1;
+                if counter == 8 {
+                    counter = 0;
+                    println!("");
+                }
+
+            }
+        }
+        //gdt
     }
 
     /// return the offset of the kernel code segment inside the table
@@ -140,10 +187,12 @@ impl GDT {
     pub fn get_kernel_data_segment_offset(&self) -> u16 {
         (&self.k_data_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
     }
+    /*
     pub fn get_user_code_segment_offset(&self) -> u16 {
         (&self.u_code_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
     }
     pub fn get_user_data_segment_offset(&self) -> u16 {
         (&self.u_code_sd as *const SegmentDescriptor) as u16 - (self as *const GDT) as u16
     }
+    */
 }

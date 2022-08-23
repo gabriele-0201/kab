@@ -1,4 +1,3 @@
-//.intel_syntax noprefix
 
 // external function, start of the kernel.c
 .extern kernel_main
@@ -10,9 +9,16 @@
 // TEST
 .extern handle_interrupt
 .global handleException0x00
+.global handleException0x06
 .global handleInterruptRequest0x00
 .global handleInterruptRequest0x01
 .global interruptIgnore
+
+
+.global testJmpAfterGdt
+.global reloadSegments
+
+
 .set IRQ_BASE, 0x20
 // END TEST
 
@@ -35,11 +41,15 @@
     // C code need a stack
     .align 16 // WHY?
     stack_bottom:
-        .skip 1048576 * 2 // 2MB
+        .skip 1048576 * 10 // 10MB
 //        .skip 4096 // 1MB
     stack_top:
 
 .section .text
+
+    test:
+        jmp resume
+
     start: 
         lea esp, stack_top
         //mov $stack_top, %esp
@@ -54,25 +64,35 @@
 
     // setGdt(limit, base)
     set_gdt:
+        call testJmpAfterGdt
         MOV   AX, [esp + 4]
         MOV   [gdtr], AX
         MOV   EAX, [ESP + 8]
         MOV   [gdtr + 2], EAX
         LGDT  [gdtr]
+
+        reloadSegments:
+           // Reload CS register containing code selector:
+           LJMP   0x08, reload_CS // 0x08 is a stand-in for your code segment
+        reload_CS:
+           // Reload data segment registers:
+           MOV   AX, 0x10 // 0x10 is a stand-in for your data segment
+           MOV   DS, AX
+           MOV   ES, AX
+           MOV   FS, AX
+           MOV   GS, AX
+           MOV   SS, AX
+
         RET
 
     // TEST 
-    handleException0x00:
-        mov byte ptr [interruptnumber], 0x00
-        jmp interrupt_first_handler
-    
-    handleInterruptRequest0x00:
-        mov byte ptr [interruptnumber], 0x20
-        call interrupt_first_handler
 
-    handleInterruptRequest0x01:
-        mov byte ptr [interruptnumber], 0x21
-        jmp interrupt_first_handler
+    testJmpAfterGdt:
+    // TEST JUMP
+            jmp test
+        resume:
+        ret
+    // END TEST JUMP
     
     interrupt_first_handler:
        pushad // -> 32 bit general purpose registers; pusha -> 16 bit 
@@ -93,6 +113,22 @@
     
     interruptIgnore:
         iret // why this is translated to iretw??
+
+    handleException0x00:
+        mov byte ptr [interruptnumber], 0x00
+        jmp interrupt_first_handler
+
+    handleException0x06:
+        mov byte ptr [interruptnumber], 0x06
+        jmp interrupt_first_handler
+    
+    handleInterruptRequest0x00:
+        mov byte ptr [interruptnumber], 0x20
+        jmp interrupt_first_handler
+
+    handleInterruptRequest0x01:
+        mov byte ptr [interruptnumber], 0x21
+        jmp interrupt_first_handler
     // END TEST
 
 .section .data
