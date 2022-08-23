@@ -4,23 +4,7 @@
 
 // global becouse the linker have to see this
 .global start
-.global set_gdt
-
-// TEST
-.extern handle_interrupt
-.global handleException0x00
-.global handleException0x06
-.global handleInterruptRequest0x00
-.global handleInterruptRequest0x01
-.global interruptIgnore
-
-
-.global testJmpAfterGdt
 .global reloadSegments
-
-
-.set IRQ_BASE, 0x20
-// END TEST
 
 // the bootloader GRUB need some standard basic info
 // the standard used is 'Multiboot'
@@ -46,10 +30,6 @@
     stack_top:
 
 .section .text
-
-    test:
-        jmp resume
-
     start: 
         lea esp, stack_top
         //mov $stack_top, %esp
@@ -62,79 +42,20 @@
             hlt // halt the CPU
             jmp hang // if does not work loop again
 
-    // setGdt(limit, base)
-    set_gdt:
-        call testJmpAfterGdt
-        MOV   AX, [esp + 4]
-        MOV   [gdtr], AX
-        MOV   EAX, [ESP + 8]
-        MOV   [gdtr + 2], EAX
-        LGDT  [gdtr]
-
-        reloadSegments:
-           // Reload CS register containing code selector:
-           LJMP   0x08, reload_CS // 0x08 is a stand-in for your code segment
-        reload_CS:
-           // Reload data segment registers:
-           MOV   AX, 0x10 // 0x10 is a stand-in for your data segment
-           MOV   DS, AX
-           MOV   ES, AX
-           MOV   FS, AX
-           MOV   GS, AX
-           MOV   SS, AX
-
-        RET
-
-    // TEST 
-
-    testJmpAfterGdt:
-    // TEST JUMP
-            jmp test
-        resume:
-        ret
-    // END TEST JUMP
-    
-    interrupt_first_handler:
-       pushad // -> 32 bit general purpose registers; pusha -> 16 bit 
-    
-       push esp
-       push [interruptnumber]
-    
-       call handle_interrupt 
-       // the return value of the called function will go on the stack
-       // the value will be the new stack pointer ?
-       // how manage the Istruction Register?
-       // maybe we will set it someway
-    
-       //add esp, 6 // ?? why 6 and not 5? 
-       mov esp, eax // set the new stack ptr
-    
-       popad 
-    
-    interruptIgnore:
-        iret // why this is translated to iretw??
-
-    handleException0x00:
-        mov byte ptr [interruptnumber], 0x00
-        jmp interrupt_first_handler
-
-    handleException0x06:
-        mov byte ptr [interruptnumber], 0x06
-        jmp interrupt_first_handler
-    
-    handleInterruptRequest0x00:
-        mov byte ptr [interruptnumber], 0x20
-        jmp interrupt_first_handler
-
-    handleInterruptRequest0x01:
-        mov byte ptr [interruptnumber], 0x21
-        jmp interrupt_first_handler
-    // END TEST
+    reloadSegments:
+       // Reload CS register containing code selector:
+       ljmp   0x08, reload_cs // 0x08 is a stand-in for your code segment
+    reload_cs:
+       // Reload data segment registers:
+       mov   ax, 0x10 // 0x10 is a stand-in for your data segment
+       mov   ds, ax
+       mov   es, ax
+       mov   fs, ax
+       mov   gs, ax
+       mov   ss, ax
+       ret
 
 .section .data
     gdtr:
         .word 0 // For limit storage
         .long 0 // For base storage
-    // TEST
-    interruptnumber: .byte 0
-    // END TEST

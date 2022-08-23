@@ -6,10 +6,6 @@
 // TODO find a solution to not duplicate this here and in the interrupts.rs
 .extern handle_interrupt
 
-.global handleException0x00
-.global andleInterruptRequest0x00
-.global handleInterruptRequest0x01
-
 .set IRQ_BASE, 0x20
 
 .section text
@@ -25,61 +21,73 @@
     //.macro HandleInterruptRequest num
     //.global handleInterruptRequest\num
     //handleInterruptRequest\num:
-    //    push eax
-
-    //    mov al, \num
-    //    add al, IRQ_BASE
-
-    //    //mov byte ptr [interruptnumber], \num + IRQ_BASE
-    //    mov byte ptr [interruptnumber], al
-
-    //    pop eax
-
+    //    mov byte ptr [interruptnumber], \num + IRQ_BASE
     //    jmp interrupt_first_handler
     //.endm
 
     //HandleException 0x00
+    //HandleException 0x01
+    //HandleException 0x02
+    //HandleException 0x03
+    //HandleException 0x04
+    //HandleException 0x05
+    //HandleException 0x06
+    //HandleException 0x07
+    //HandleException 0x08
+    //HandleException 0x09
+    //HandleException 0x0A
+    //HandleException 0x0B
+    //HandleException 0x0C
+    //HandleException 0x0D
+    //HandleException 0x0E
+    //HandleException 0x0F
+    //HandleException 0x10
+    //HandleException 0x11
+    //HandleException 0x12
+    //HandleException 0x13
     //
     //HandleInterruptRequest 0x00
     //HandleInterruptRequest 0x01
+    //HandleInterruptRequest 0x02
+    //HandleInterruptRequest 0x03
+    //HandleInterruptRequest 0x04
+    //HandleInterruptRequest 0x05
+    //HandleInterruptRequest 0x06
+    //HandleInterruptRequest 0x07
+    //HandleInterruptRequest 0x08
+    //HandleInterruptRequest 0x09
+    //HandleInterruptRequest 0x0A
+    //HandleInterruptRequest 0x0B
+    //HandleInterruptRequest 0x0C
+    //HandleInterruptRequest 0x0D
+    //HandleInterruptRequest 0x0E
+    //HandleInterruptRequest 0x0F
+    //HandleInterruptRequest 0x31
 
-    // TEST WITHOUT MACRO
-    handleException0x00:
-        mov byte ptr [interruptnumber], 0x00
-        jmp interrupt_first_handler
-    
-    
+    .global handleInterruptRequest0x00
     handleInterruptRequest0x00:
-        push eax
-        mov al, 0x00
-        add al, IRQ_BASE
-        mov byte ptr [interruptnumber], al
-        pop eax
+        mov byte ptr [interruptnumber], 0x00 + IRQ_BASE
         jmp interrupt_first_handler
 
-    handleInterruptRequest0x01:
-        push eax
-        mov al, 0x01
-        add al, IRQ_BASE
-        mov byte ptr [interruptnumber], al
-        pop eax
-        jmp interrupt_first_handler
-    
     interrupt_first_handler:
        pushad // -> 32 bit general purpose registers; pusha -> 16 bit 
+       push ds
+       push es
+       push fs
+       push gs
     
        push esp
-       push [interruptnumber]
-    
+       push interruptnumber // automatically deferenciate
        call handle_interrupt 
-       // the return value of the called function will go on the stack
-       // the value will be the new stack pointer ?
-       // how manage the Istruction Register?
-       // maybe we will set it someway
     
-       //add esp, 6 // ?? why 6 and not 5? 
-       mov esp, eax // set the new stack ptr
+       // theorically this will jump over the old esp value, the interruptnumber and pointing to the last element
+       //add esp, 5 // in viktor code here is 6
+       mov esp, eax // set the new stack ptr with the returned value
     
+       pop gs
+       pop fs
+       pop es
+       pop ds
        popad 
     
     .global interruptIgnore

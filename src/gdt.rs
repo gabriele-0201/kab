@@ -56,10 +56,13 @@ impl SegmentDescriptor {
         
         let flags: u8;
 
-        if limit < 65536 {
-            flags = 0x40; // flags for 16 bit mode
+        if limit == 0 {
+            flags = 0;
+        }
+        else if limit <= 65536 {
+            flags = 0x4; // flags for 16 bit mode
         } else {
-            flags = 0xC0; // flags for 32 bit mode
+            flags = 0xC; // flags for 32 bit mode
 
             if (limit & 0xFFF) == 0xFFF {
                 // all 12 bit are 1
@@ -89,7 +92,8 @@ impl HighLimitAndFlags {
     /// Limit is surely under 20 bit
     /// Flags has 4 bit
     pub fn new(limit: u32, flags: u8) -> Self {
-        HighLimitAndFlags((((limit >> 16 & 0xF) | (flags << 4) as u32) & 0xFF) as u8)
+        //HighLimitAndFlags((((limit >> 16 & 0xF) | (flags << 4) as u32) & 0xFF) as u8)
+        HighLimitAndFlags((((limit >> 16 & 0xF) << 4 | flags as u32) & 0xFF) as u8)
     }
 }
 
@@ -129,8 +133,8 @@ impl GDT {
         GDT {
             null_sd: SegmentDescriptor::new(0, 0 ,0),
             //unused_sd: SegmentDescriptor::new(0, 0, 0),
-            k_code_sd: SegmentDescriptor::new(0, 0x00FFFFFF, KERNEL_CODE_SEGMENT_FLAGS), 
-            k_data_sd: SegmentDescriptor::new(0, 0x00FFFFFF, KERNEL_DATA_SEGMENT_FLAGS),
+            k_code_sd: SegmentDescriptor::new(0, 0xFFFFFFFF, KERNEL_CODE_SEGMENT_FLAGS), 
+            k_data_sd: SegmentDescriptor::new(0, 0xFFFFFFFF, KERNEL_DATA_SEGMENT_FLAGS),
             //u_code_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_CODE_SEGMENT_FLAGS), 
             //u_data_sd: SegmentDescriptor::new(0, 0x00FFFFFF, USER_DATA_SEGMENT_FLAGS), 
             //task_state_sd: SegmentDescriptor::new((64*1024*1024 * 4) + 1, 0, TASK_STATE_SEGMENT_FLAGS), // size = 64KiB
@@ -139,17 +143,16 @@ impl GDT {
 
     pub fn load(&self) {
         // This function should be load the GDT in Protected and Flat Mode
+        
         //unsafe { set_gdt(core::mem::size_of::<GDT>() as u32, self); };
+        
         let gdt = DescriptorTablePointer {
-            //limit: core::mem::size_of::<GDT>() as u16,
-            limit: (3 * core::mem::size_of::<SegmentDescriptor>() - 1) as u16,
+            limit: core::mem::size_of::<GDT>() as u16 - 1, // maybe the - 1 is wrong
             base: self
         };
         unsafe {
             core::arch::asm!("lgdt [{}]", in(reg) &gdt, options(readonly, nostack, preserves_flags));
-            //reloadSegments();
-            Self::print_gdt();
-            Self::print_gdt();
+            reloadSegments();
         }
     }
 
@@ -164,9 +167,9 @@ impl GDT {
             core::arch::asm!("sgdt [{}]", in(reg) &mut gdt, options(nostack, preserves_flags));
 
             println!("Il limite dalla gdt e': {}", gdt.limit);
+            println!("Raw gdt:");
             let mut counter = 0;
             for i in 0..gdt.limit + 1 {
-
                 print!("{:02x}", *(gdt.base as *const u8).offset(i as isize));
 
                 counter += 1;
@@ -174,7 +177,27 @@ impl GDT {
                     counter = 0;
                     println!("");
                 }
+            }
 
+            let n_segments = 3;
+            for index_segment in 0..n_segments {
+                let base_segment_offset = index_segment * 8;
+                let limit = (*(gdt.base as *const u16) as u32) & 
+                    (((*(gdt.base as *const u8).offset(base_segment_offset + 6) & 0xF) as u32) << 16);
+                let base = (*(gdt.base as *const u16).offset(base_segment_offset + 1) as u32) & 
+                    (*(gdt.base as *const u8).offset(base_segment_offset + 4) as u32) &
+                    (*(gdt.base as *const u8).offset(base_segment_offset + 7) as u32);
+                let access_type = *(gdt.base as *const u8).offset(base_segment_offset + 5);
+                let flag = (*(gdt.base as *const u8).offset(base_segment_offset + 6) & 0xF0) >> 4;
+
+                println!("primi 16 bit: {}", (*(gdt.base as *const u16) as u32));
+                println!("altri 8 bit: {}", ((*(gdt.base as *const u8).offset(base_segment_offset + 6) & 0xF) as u32));
+
+                println!("limit: {}", limit);
+                println!("base: {}", base);
+                println!("access_type: {:02x}", access_type);
+                println!("flag: {:02x}", flag);
+                
             }
         }
         //gdt

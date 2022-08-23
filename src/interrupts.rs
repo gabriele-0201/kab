@@ -6,9 +6,9 @@ use core::arch::asm;
 extern {
     pub fn interruptIgnore();
     pub fn handleInterruptRequest0x00();
-    pub fn handleInterruptRequest0x01();
-    pub fn handleException0x00();
-    pub fn handleException0x06();
+    //pub fn handleInterruptRequest0x01();
+    //pub fn handleException0x00();
+    //pub fn handleException0x06();
 }
 
 /// This gate could be Interrupt Gate or Trap Gate 
@@ -89,13 +89,14 @@ impl IDT {
         }
         
         //idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
-        idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
-        idt_struct.idt[0x06] = GateDescritor::new(handleException0x06, code_segment, 0, 0xE);
+
+        // FOR NOW idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
+        // FOR NOW idt_struct.idt[0x06] = GateDescritor::new(handleException0x06, code_segment, 0, 0xE);
 
         ////idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
         idt_struct.idt[(interrupt_offset + 0x00) as usize] = GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);
         ////idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
-        idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
+        // FOR NOW idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
 
         println!("entry 0x00: {:?}", idt_struct.idt[0x00]);
         println!("entry 0x01: {:?}", idt_struct.idt[0x01]);
@@ -158,6 +159,6 @@ pub fn disable() {
 
 #[no_mangle]
 pub extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) -> u32 {
-    println!("Interrupt: {}", interrupt_number);
+    println!("Interrupt: 0x{:02x}", interrupt_number);
     esp
 }

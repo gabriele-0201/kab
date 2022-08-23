@@ -25,10 +25,6 @@ fn panic(info: &PanicInfo) -> ! {
 
 //static HELLO: &[u8] = b"CIAOOOOOOO";
 
-extern {
-    pub fn testJmpAfterGdt();
-}
-
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
     /* OLD
@@ -62,10 +58,6 @@ pub extern "C" fn kernel_main() -> ! {
     gdt.load();
 
     println!("GDT loaded!");
-
-    unsafe {
-        testJmpAfterGdt();
-    }
 
     let idt = interrupts::IDT::new(0x20, &gdt);
     idt.load();
