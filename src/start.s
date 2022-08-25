@@ -3,8 +3,7 @@
 .extern kernel_main
 
 // global becouse the linker have to see this
-.global start
-.global reloadSegments
+//.global start
 
 // the bootloader GRUB need some standard basic info
 // the standard used is 'Multiboot'
@@ -25,11 +24,12 @@
     // C code need a stack
     .align 16 // WHY?
     stack_bottom:
-        .skip 1048576 * 10 // 10MB
+        .skip 1048576 * 1 // 1MB
 //        .skip 4096 // 1MB
     stack_top:
 
 .section .text
+.global start
     start: 
         lea esp, stack_top
         //mov $stack_top, %esp
@@ -42,9 +42,11 @@
             hlt // halt the CPU
             jmp hang // if does not work loop again
 
+.global reloadSegments
     reloadSegments:
        // Reload CS register containing code selector:
-       ljmp   0x08, reload_cs // 0x08 is a stand-in for your code segment
+       //ljmp   0x08, reload_cs // 0x08 is a stand-in for your code segment
+       jmp   0x08, reload_cs // global_asm does not like ljmp
     reload_cs:
        // Reload data segment registers:
        mov   ax, 0x10 // 0x10 is a stand-in for your data segment

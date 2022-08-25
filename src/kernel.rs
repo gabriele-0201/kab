@@ -2,13 +2,12 @@
 #![no_main] // disable all Rust-level entry points
 
             
-//global_asm!(core::include_str!("start.s"), options(raw));
-//global_asm!(include_str!("interrupt_handlers.s"), options(raw));
+//core::arch::global_asm!(core::include_str!("start.s"), options(raw));
+//core::arch::global_asm!(include_str!("interrupt_handlers.s"), options(raw));
 
 // src/main.rs
 
 use core::panic::PanicInfo;
-use core::arch::global_asm;
 
 mod vga_buffer;
 mod init;
@@ -65,7 +64,7 @@ pub extern "C" fn kernel_main() -> ! {
     println!("IDT loaded!");
 
     println!("Activation interrupts!");
-    interrupts::enable();
+    idt.enable();
 
     loop {}
 }

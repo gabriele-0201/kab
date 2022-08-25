@@ -152,6 +152,7 @@ impl GDT {
         };
         unsafe {
             core::arch::asm!("lgdt [{}]", in(reg) &gdt, options(readonly, nostack, preserves_flags));
+            //Self::print_gdt();
             reloadSegments();
         }
     }
@@ -199,6 +200,11 @@ impl GDT {
                 println!("flag: {:02x}", flag);
                 
             }
+
+            // test
+            //println!("{:02x}", (((0xFFFFF >> 16 & 0xF) | (0xC << 4) as u32) & 0xFF) as u8);
+            //println!("{:02x}", (((0xFFFFF >> 16 & 0xF) << 4 | 0xC as u32) & 0xFF) as u8);
+
         }
         //gdt
     }

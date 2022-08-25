@@ -6,10 +6,12 @@ use core::arch::asm;
 extern {
     pub fn interruptIgnore();
     pub fn handleInterruptRequest0x00();
-    //pub fn handleInterruptRequest0x01();
+    pub fn handleInterruptRequest0x01();
     //pub fn handleException0x00();
     //pub fn handleException0x06();
 }
+
+static DO_HANDLE_INTERRUPT_PTR: Option<&fn(u8, u32) -> u32> = None;
 
 /// This gate could be Interrupt Gate or Trap Gate 
 /// Each entry have 64bit
@@ -38,7 +40,7 @@ impl GateDescritor {
         }
     }
 
-    /* using an array with the default initialization will cause weird stuff
+    // using an array with the default initialization will cause weird stuff
     pub fn update(&mut self, ptr: unsafe extern "C" fn(), segment_selector: u16, ring: u8, descriptor_type: u8) {
 
         self.low_ptr = ((ptr as *const fn()) as u32 & 0xFFFF) as u16;
@@ -47,7 +49,6 @@ impl GateDescritor {
         self.high_ptr = (((ptr as *const fn()) as u32 >> 16) & 0xFFFF) as u16;
           
     }
-    */
 }
 
 #[repr(C, packed(2))]
@@ -84,39 +85,38 @@ impl IDT {
             pic_slave_data: Port8Bit::new(0xA1)
         };
 
+        // SET UP THE ENTRY OF THE IDT
+        /*
         for i in 0..255 {
             idt_struct.idt[i] = GateDescritor::new(interruptIgnore, code_segment, 0, 0xE);
         }
+        */
         
-        //idt_struct.idt[0x00].update(handleException0x00, code_segment, 0, 0xE);
+        // idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
+        // idt_struct.idt[0x06] = GateDescritor::new(handleException0x06, code_segment, 0, 0xE);
 
-        // FOR NOW idt_struct.idt[0x00] = GateDescritor::new(handleException0x00, code_segment, 0, 0xE);
-        // FOR NOW idt_struct.idt[0x06] = GateDescritor::new(handleException0x06, code_segment, 0, 0xE);
-
-        ////idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
-        idt_struct.idt[(interrupt_offset + 0x00) as usize] = GateDescritor::new(handleInterruptRequest0x00, code_segment, 0, 0xE);
-        ////idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
-        // FOR NOW idt_struct.idt[(interrupt_offset + 0x01) as usize] = GateDescritor::new(handleInterruptRequest0x01, code_segment, 0, 0xE);
-
-        println!("entry 0x00: {:?}", idt_struct.idt[0x00]);
-        println!("entry 0x01: {:?}", idt_struct.idt[0x01]);
-        println!("entry 0x20: {:?}", idt_struct.idt[0x20]);
-        println!("entry 0x21: {:?}", idt_struct.idt[0x21]);
+        // not sure about the correctenss of update -> maybe more correct create a different one
+        idt_struct.idt[(interrupt_offset + 0x00) as usize].update(handleInterruptRequest0x00, code_segment, 0, 0xE);
+        idt_struct.idt[(interrupt_offset + 0x01) as usize].update(handleInterruptRequest0x01, code_segment, 0, 0xE);
 
         //// Comunicate with PIC master and slave
         idt_struct.pic_master_command.write(0x11);
         idt_struct.pic_slave_command.write(0x11);
 
         //// remap
+        // set up the offsets
         idt_struct.pic_master_data.write(interrupt_offset as u8);
         idt_struct.pic_slave_data.write((interrupt_offset+8) as u8);
 
+        // tell to the master that there is a slave and vicecersa
         idt_struct.pic_master_data.write(0x04);
         idt_struct.pic_slave_data.write(0x02);
 
+        // additional information about the environment
         idt_struct.pic_master_data.write(0x01);
         idt_struct.pic_slave_data.write(0x01);
 
+        // restore saved masks ??
         idt_struct.pic_master_data.write(0x00);
         idt_struct.pic_slave_data.write(0x00);
 
@@ -135,30 +135,39 @@ impl IDT {
             asm!("lidt [{}]", in(reg) &idt_descriptor , options(readonly, nostack, preserves_flags));
         }
     }
-}
+    
+    fn do_handle_interrupt(&self, interrupt_number: u8, esp: u32) -> u32 {
 
-/// Enable interrupts.
-/// This is a wrapper around the `sti` instruction.
-#[inline]
-pub fn enable() {
-    unsafe {
-        asm!("sti", options(nomem, nostack));
+
+    println!("Interrupt: 0x{:02x}", interrupt_number);
+
+        esp
     }
-    println!("Activated interrupts!");
-}
-
-/// Disable interrupts.
-/// This is a wrapper around the `cli` instruction.
-#[inline]
-pub fn disable() {
-    unsafe {
-        asm!("cli", options(nomem, nostack));
+    
+    /// Enable interrupts.
+    /// This is a wrapper around the `sti` instruction.
+    #[inline]
+    pub fn enable(&self) {
+        unsafe {
+            asm!("sti", options(nomem, nostack));
+        if let None = DO_HANDLE_INTERRUPT_PTR {
+            DO_HANDLE_INTERRUPT_PTR = Some(self.do_handle_interrupt);
+        }
+        }
+        println!("Activated interrupts!");
+    }
+    
+    /// Disable interrupts.
+    /// This is a wrapper around the `cli` instruction.
+    #[inline]
+    pub fn disable(&self) {
+        unsafe {
+            asm!("cli", options(nomem, nostack));
+        }
     }
 }
-
 
 #[no_mangle]
 pub extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) -> u32 {
-    println!("Interrupt: 0x{:02x}", interrupt_number);
-    esp
+    do_handle_interrupt(interrupt_number, esp)
 }
