@@ -11,7 +11,8 @@ extern {
     //pub fn handleException0x06();
 }
 
-static DO_HANDLE_INTERRUPT_PTR: Option<&fn(u8, u32) -> u32> = None;
+// TODO change in a future
+static mut INTERRUPT_MANAGER_PTR: Option<*const IDT> = None;
 
 /// This gate could be Interrupt Gate or Trap Gate 
 /// Each entry have 64bit
@@ -63,17 +64,16 @@ pub struct IDT {
     idt: [GateDescritor; 256],
     // used because the IRQ start from 0 but in the cpu the relative entry
     // int he idt is offsetted by a custom value
-    hw_interrupt_offset: u16, 
+    hw_interrupt_offset: u8, 
     pic_master_command: Port8Bit,
     pic_master_data: Port8Bit,
     pic_slave_command: Port8Bit,
     pic_slave_data: Port8Bit,
 }
 
-
 // IDK if is usefull to update the IDT onoging or is fixed after initialization
 impl IDT {
-    pub fn new(interrupt_offset: u16, gdt: &GDT) -> Self {
+    pub fn new(interrupt_offset: u8, gdt: &GDT) -> Self {
         let code_segment = gdt.get_kernel_code_segment_offset();
 
         let mut idt_struct = IDT {
@@ -139,7 +139,14 @@ impl IDT {
     fn do_handle_interrupt(&self, interrupt_number: u8, esp: u32) -> u32 {
 
 
-    println!("Interrupt: 0x{:02x}", interrupt_number);
+        println!("Interrupt: 0x{:02x}", interrupt_number);
+
+        if interrupt_number >= self.hw_interrupt_offset && interrupt_number < self.hw_interrupt_offset + 16 {
+            self.pic_master_command.write(0x20);
+            if interrupt_number >= self.hw_interrupt_offset + 8 {
+                self.pic_slave_command.write(0x20);
+            }
+        }
 
         esp
     }
@@ -150,9 +157,9 @@ impl IDT {
     pub fn enable(&self) {
         unsafe {
             asm!("sti", options(nomem, nostack));
-        if let None = DO_HANDLE_INTERRUPT_PTR {
-            DO_HANDLE_INTERRUPT_PTR = Some(self.do_handle_interrupt);
-        }
+            if let None = INTERRUPT_MANAGER_PTR {
+                INTERRUPT_MANAGER_PTR = Some(self);
+            }
         }
         println!("Activated interrupts!");
     }
@@ -169,5 +176,12 @@ impl IDT {
 
 #[no_mangle]
 pub extern "C" fn handle_interrupt(interrupt_number: u8, esp: u32) -> u32 {
-    do_handle_interrupt(interrupt_number, esp)
+    unsafe {
+        if let Some(interrupt_handler) = INTERRUPT_MANAGER_PTR {
+           if let Some(interrupt_handler) = <*const IDT>::as_ref(interrupt_handler) {
+                return interrupt_handler.do_handle_interrupt(interrupt_number, esp);
+           } 
+        } 
+        esp
+    }
 }
