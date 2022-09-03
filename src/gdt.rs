@@ -167,6 +167,8 @@ impl GDT {
         unsafe {
             core::arch::asm!("sgdt [{}]", in(reg) &mut gdt, options(nostack, preserves_flags));
 
+
+            println!("La base della gdt e': {:x}", gdt.base as u32);
             println!("Il limite dalla gdt e': {}", gdt.limit);
             println!("Raw gdt:");
             let mut counter = 0;

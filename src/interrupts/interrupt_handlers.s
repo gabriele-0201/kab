@@ -3,7 +3,7 @@
 // the interrupt handerl function + other thigs
 
 // TODO find a solution to not duplicate this here and in the interrupts.rs
-.extern handle_interrupt
+.extern handle_interrupts
 
 .set IRQ_BASE, 0x20
 
@@ -72,7 +72,7 @@
     
        push esp
        push interruptnumber // automatically deferenciate
-       call handle_interrupt 
+       call handle_interrupts
     
        // theorically this will jump over the old esp value, the interruptnumber and pointing to the last element
        //add esp, 5 // in viktor code here is 6

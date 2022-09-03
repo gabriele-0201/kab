@@ -14,6 +14,7 @@ mod init;
 mod gdt;
 mod port;
 mod interrupts;
+mod multiboot2;
 
 /// This function is called on panic.
 #[panic_handler]
@@ -25,7 +26,7 @@ fn panic(info: &PanicInfo) -> ! {
 //static HELLO: &[u8] = b"CIAOOOOOOO";
 
 #[no_mangle]
-pub extern "C" fn kernel_main() -> ! {
+pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_information_address: usize) -> ! {
     /* OLD
     let vga_buffer = 0xb8000 as *mut u8;
 
@@ -47,7 +48,11 @@ pub extern "C" fn kernel_main() -> ! {
 
     // vga_buffer::print_something();
     
-
+    // TODO manage better the lock, could couse dead lock
+    //  + example: have something is blocking the WRTIER and a interrupt manager is called
+    //  => this cause a dead lock because the interrupt will never find free the WRITER and the
+    //  => previous will never finish using it
+    
     vga_buffer::WRITER.lock().clear_screen();
 
     println!("Vga Buffer Ready!");
@@ -58,13 +63,17 @@ pub extern "C" fn kernel_main() -> ! {
 
     println!("GDT loaded!");
 
-    let idt = interrupts::IDT::new(0x20, &gdt);
+    let idt = interrupts::idt::IDT::new(0x20, &gdt);
     idt.load();
 
     println!("IDT loaded!");
 
     println!("Activation interrupts!");
     idt.enable();
+
+
+    let boot_info = multiboot2::BootInfo::new(multiboot_magic_number, multiboot_information_address).unwrap();
+    println!("{:?}", boot_info);
 
     loop {}
 }

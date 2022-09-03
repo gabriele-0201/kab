@@ -31,8 +31,15 @@
 .section .text
 .global start
     start: 
-        lea esp, stack_top
         //mov $stack_top, %esp
+        lea esp, stack_top
+        //mov edi, eax // mov Multiboot flag
+        //mov esi, ebx // mov Multiboot info
+
+        push ebx // mov Multiboot info
+        push eax // mov Multiboot flag
+
+
 
         // now the environment is ready, start the code
         call kernel_main

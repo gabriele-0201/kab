@@ -40,5 +40,19 @@ You can:
     + Write a driver for the IOAPIC
     + Make use of Message Signaled Interrupts
 
+# Drivers
+
++ Could be defined (not in my case) some type of drivers
+
 # KEYBOARD:
+
+Keyboard needs:
++ data port: 0x60
+    + from that I can read the scancode
++ command port: 0x64
+
+At the creation al the buffer of scancode should be read and you have to tell the
+keyboard to start sending interrupts (or something like that) writing 0xAE on the command port
+
+
 
