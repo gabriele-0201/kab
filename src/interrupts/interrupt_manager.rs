@@ -14,7 +14,7 @@ pub fn handle_pit(_idt: &IDT, esp: u32) -> u32 {
 // this function should only need the data and command port but still get all the idt -> do it
 // better in the future
 pub fn handle_keyboard_interrupt(idt: &IDT, esp: u32) -> u32 {
-    // les efficient ever
+    // less efficient ever
 
     // is this the better option?
     static mut shift: bool = false;

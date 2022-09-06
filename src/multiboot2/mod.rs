@@ -19,15 +19,18 @@ pub enum Syms {
 pub struct BootInfo {
     address: *const usize,
     flag: usize, 
-    mem_lower: Option<usize>,
-    mem_upper: Option<usize>,
-    boot_device: Option<usize>,
-    cmd_line_address: Option<*const usize>,
-    mods_count: Option<usize>,
-    mods_address: Option<*const usize>,
-    syms: Option<Syms>,
+    pub mem_lower: Option<usize>,
+    pub mem_upper: Option<usize>,
+    pub boot_device: Option<usize>,
+    pub cmd_line_address: Option<*const usize>,
+    pub mods_count: Option<usize>,
+    pub mods_address: Option<*const usize>,
+    pub syms: Option<Syms>,
+    pub mmap: Option<MemoryMap>
+    /*
     mmap_length: Option<usize>, 
     mmap_address: Option<*const usize>
+    */
     // for now other values is useless I think
 }
 
@@ -76,8 +79,16 @@ impl BootInfo {
                 });
             } // TODO understand why is always null
 
+            /*
             let mmap_length = check_flag_and_set!(6, *address.offset(11));
             let mmap_address = check_flag_and_set!(6, *address.offset(12) as *const usize);
+            */
+
+            let mmap = check_flag_and_set!(6, 
+                MemoryMap {
+                    length: check_flag_and_set!(6, *address.offset(11)).unwrap(),
+                    start_address: check_flag_and_set!(6, *address.offset(12) as *const MemoryMapElement).unwrap(),
+                });
 
             Ok(BootInfo {
                 address,
@@ -89,8 +100,7 @@ impl BootInfo {
                 mods_count,
                 mods_address,
                 syms,
-                mmap_length, 
-                mmap_address
+                mmap, 
             })
         }
     }
@@ -153,65 +163,57 @@ impl BootInfo {
 
 }
 
-/*
-impl core::fmt::Debug for BootInfo {
-    // implement this to be able to use {:?}
-
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-
-        /*
-        println!("Flag: 0x{:b}", boot_info.get_flag()); // now flag: 1001001111
-        println!("lower and upper mem (KiB): {:?}", boot_info.get_mem().unwrap()); 
-        println!("boot device: 0x{:x}", boot_info.get_boot_device().unwrap()); 
-        */
-
-        const ELF_SECTIONS_LIMIT: usize = 17;
-        let mut debug = f.debug_struct("Multiboot2 Boot Information");
-
-        debug
-            .field("Start Address", &(self.address as usize))
-            .field("Flag", &self.get_flag())
-            // TODO should be managed better the flag not setted
-            .field("Lower and Upper mem (KiB)", &format_args!("{:?}", self.get_mem().unwrap_or((0, 0))))
-            .field("Boot Device", &format_args!("0x{:X}", self.get_boot_device().unwrap()))
-            .field("Mods Counter", &self.get_mods_count().unwrap_or(0));
-
-        
-        debug.finish()
-    }
+#[derive(Debug, Clone, Copy)]
+pub struct MemoryMap {
+    length: usize, // length of the buffer, I think in bytes
+    start_address: *const MemoryMapElement,
 }
-*/
 
-#[derive(Debug)]
-struct MemoryMap {
-    mods_count: usize,
-    mods_current: usize,
-    mods_address: *const MemoryMapElement,
+#[derive(Debug, Clone, Copy)]
+pub struct MemoryMapIterator {
+    current: *const MemoryMapElement,
+    end: *const MemoryMapElement
 }
 
 // use copy to avoid moving out datas from memory
-#[derive(Clone, Copy)]
-#[repr(C)]
-struct MemoryMapElement {
-    base_addr: *const usize,
+#[derive(Debug, Clone, Copy)]
+#[repr(C, packed)]
+pub struct MemoryMapElement {
+    size: usize,
+    base_addr: usize,
+    reserved_addr: usize,
     lenght: usize,
-    type_map: usize
+    reserved_length: usize,
+    type_mmap: usize
 }
 
-impl Iterator for MemoryMap {
-    type Item = MemoryMapElement;
+impl IntoIterator for MemoryMap {
+    type Item = (usize, usize, usize);
+    type IntoIter = MemoryMapIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MemoryMapIterator {
+            current: self.start_address,
+            end: unsafe { self.start_address.byte_add(self.length) }
+        }
+    }
+}
+
+impl Iterator for MemoryMapIterator {
+    type Item = (usize, usize, usize);
     
     fn next(&mut self) -> Option<Self::Item> {
-        if self.mods_current >= self.mods_count {
+        if self.current >= self.end {
             return None
         }
 
         unsafe {
-            let elem = Some(*self.mods_address);
+            let elem = *self.current;
 
-            let new_address = self.mods_address as usize + *(self.mods_address as *const usize).offset(-1) as usize;
-            self.mods_address = new_address as *const MemoryMapElement;
-            elem
+            // should be equal to: self.current = self.current.offset(2);
+            self.current = self.current.add(1);
+
+            Some((elem.base_addr, elem.lenght, elem.type_mmap))
         }
 
     }

@@ -49,3 +49,25 @@ Una volta che grub ha fatto il suo se viene seguito lo standard multiboot2 allor
 110-115 | color_info        |
         +-------------------+
 
+The table related to mmap_addr should be:
+
+        +-------------------+
+-4      | size              |
+        +-------------------+
+0       | base_addr         |
+8       | length            |
+16      | type              |
+        +-------------------+
+
+**BUT IT IS NOT (AT LEAST IT SEEMS TO ME), IT IS:**
+
+        +-------------------+
+0       | size              |
+        +-------------------+
+4       | base_addr         |
+12      | length            |
+20      | type              |
+        +-------------------+
+
+this because the mmap_addr point to the start 
+of the buffer and not to the base_addr value inside the first strucure of the buffer 

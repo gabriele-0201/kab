@@ -1,5 +1,6 @@
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
+#![feature(pointer_byte_offsets)]
 
             
 //core::arch::global_asm!(core::include_str!("start.s"), options(raw));
@@ -74,6 +75,16 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
 
     let boot_info = multiboot2::BootInfo::new(multiboot_magic_number, multiboot_information_address).unwrap();
     println!("{:?}", boot_info);
+
+    //println!("Print all {} mmap", boot_info.mmap.unwrap().length);
+    for (index, (base, length, type_mmap)) in boot_info.mmap.unwrap().into_iter().enumerate() {
+        
+        if type_mmap != 1 { continue; }
+        
+        //if index >= 5 { break; }
+
+        println!("base: {:?}, length: 0x{:X}", base, length);
+    }
 
     loop {}
 }
