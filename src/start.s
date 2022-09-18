@@ -36,6 +36,7 @@
         //mov edi, eax // mov Multiboot flag
         //mov esi, ebx // mov Multiboot info
 
+        push esp // TEST push th stack position
         push ebx // mov Multiboot info
         push eax // mov Multiboot flag
 

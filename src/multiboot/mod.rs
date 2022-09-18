@@ -79,11 +79,6 @@ impl BootInfo {
                 });
             } // TODO understand why is always null
 
-            /*
-            let mmap_length = check_flag_and_set!(6, *address.offset(11));
-            let mmap_address = check_flag_and_set!(6, *address.offset(12) as *const usize);
-            */
-
             let mmap = check_flag_and_set!(6, 
                 MemoryMap {
                     length: check_flag_and_set!(6, *address.offset(11)).unwrap(),
@@ -166,7 +161,7 @@ impl BootInfo {
 #[derive(Debug, Clone, Copy)]
 pub struct MemoryMap {
     length: usize, // length of the buffer, I think in bytes
-    start_address: *const MemoryMapElement,
+    pub start_address: *const MemoryMapElement,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -187,8 +182,14 @@ pub struct MemoryMapElement {
     type_mmap: usize
 }
 
+pub struct MemoryMapArea {
+    pub base: usize,
+    pub length: usize,
+    pub type_mmap: usize
+}
+
 impl IntoIterator for MemoryMap {
-    type Item = (usize, usize, usize);
+    type Item = MemoryMapArea;
     type IntoIter = MemoryMapIterator;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -200,7 +201,7 @@ impl IntoIterator for MemoryMap {
 }
 
 impl Iterator for MemoryMapIterator {
-    type Item = (usize, usize, usize);
+    type Item = MemoryMapArea;
     
     fn next(&mut self) -> Option<Self::Item> {
         if self.current >= self.end {
@@ -213,7 +214,11 @@ impl Iterator for MemoryMapIterator {
             // should be equal to: self.current = self.current.offset(2);
             self.current = self.current.add(1);
 
-            Some((elem.base_addr, elem.lenght, elem.type_mmap))
+            Some(MemoryMapArea {
+                    base: elem.base_addr, 
+                    length: elem.lenght, 
+                    type_mmap: elem.type_mmap
+            })
         }
 
     }

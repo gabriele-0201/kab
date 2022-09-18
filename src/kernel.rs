@@ -15,7 +15,8 @@ mod init;
 mod gdt;
 mod port;
 mod interrupts;
-mod multiboot2;
+mod multiboot;
+mod memory_manager;
 
 /// This function is called on panic.
 #[panic_handler]
@@ -27,7 +28,7 @@ fn panic(info: &PanicInfo) -> ! {
 //static HELLO: &[u8] = b"CIAOOOOOOO";
 
 #[no_mangle]
-pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_information_address: usize) -> ! {
+pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_information_address: usize, stack_kernel_top: usize) -> ! {
     /* OLD
     let vga_buffer = 0xb8000 as *mut u8;
 
@@ -72,18 +73,32 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
     println!("Activation interrupts!");
     idt.enable();
 
+    let boot_info = multiboot::BootInfo::new(multiboot_magic_number, multiboot_information_address).unwrap();
 
-    let boot_info = multiboot2::BootInfo::new(multiboot_magic_number, multiboot_information_address).unwrap();
+    /* IDK - for now simply use the stack_top as starting poitn
     println!("{:?}", boot_info);
 
-    //println!("Print all {} mmap", boot_info.mmap.unwrap().length);
-    for (index, (base, length, type_mmap)) in boot_info.mmap.unwrap().into_iter().enumerate() {
-        
-        if type_mmap != 1 { continue; }
-        
-        //if index >= 5 { break; }
+    for mmap_area in boot_info.mmap.unwrap() {
+        if mmap_area.type_mmap != 1 { continue; }
+        println!("base: {:X}, length: 0x{:X}", mmap_area.base, mmap_area.length);
+    }
 
-        println!("base: {:?}, length: 0x{:X}", base, length);
+    println!("Address multiboot: 0x{:X}", multiboot_information_address);
+    println!("Address mmap_addr: {:?}", boot_info.mmap);
+    println!("Address TOP stack: 0x{:X}", stack_position);
+    */
+
+    let mut frame_allocator = memory_manager::frame_allocator::FrameAllocator::new(stack_kernel_top, &boot_info);
+
+    println!("Frame Allocator: {:?}", frame_allocator);
+
+    use memory_manager::frame_allocator::Allocator;
+    let to_test = memory_manager::frame_allocator::Frame::new(127000);
+    loop {
+        let f = frame_allocator.allocate();
+        if f > to_test {
+            println!("{:?}", f);
+        }
     }
 
     loop {}
