@@ -88,18 +88,7 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
     println!("Address TOP stack: 0x{:X}", stack_position);
     */
 
-    let mut frame_allocator = memory_manager::frame_allocator::FrameAllocator::new(stack_kernel_top, &boot_info);
-
-    println!("Frame Allocator: {:?}", frame_allocator);
-
-    use memory_manager::frame_allocator::Allocator;
-    let to_test = memory_manager::frame_allocator::Frame::new(127000);
-    loop {
-        let f = frame_allocator.allocate();
-        if f > to_test {
-            println!("{:?}", f);
-        }
-    }
+    let memory_manager = memory_manager::MemoryManager::new(stack_kernel_top, &boot_info);
 
     loop {}
 }

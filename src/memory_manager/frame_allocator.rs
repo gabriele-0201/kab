@@ -1,25 +1,30 @@
 use super::*;
 
-const FRAME_SIZE: usize = 4096;
 // Start allocating frame from stack_top + stack_frame_max
 
 pub trait Allocator {
-    fn allocate(&mut self) -> Frame;
+    fn allocate(&mut self) -> Option<Frame>;
     fn deallocate(&mut self, to_deallocate: Frame);
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Frame {
-    number: usize
+    pub number: usize
 }
 
 impl Frame {
-    pub fn new(starting_frame: usize) -> Self {
-        Self { number: starting_frame }
+    pub fn new(addr: usize) -> Self {
+        Self { 
+            number: (addr as usize)/FRAME_SIZE + if (addr as usize) % FRAME_SIZE != 0 { 1 } else { 0 } 
+        }
     }
 
     fn next(&self) -> Self {
         Self { number: self.number + 1 }
+    }
+
+    pub fn get_physical_addr(&self) -> paging::PhysicalAddr {
+        paging::PhysicalAddr::new(FRAME_SIZE * self.number)
     }
 }
 
@@ -38,19 +43,24 @@ impl<T: Default> Stack<T> {
     }
 
     fn pop(&mut self) -> Option<T> {
-        if self.stack_ptr == self.stack_ptr {
+        //crate::println!("stack ptr is: {:?}", self.stack_ptr);
+        //crate::println!("something popped");
+        if self.stack_top == self.stack_ptr {
             return None
         }
 
-        let val = unsafe { core::mem::take(&mut *self.stack_ptr) };
         self.stack_ptr = ((self.stack_ptr as usize) + core::mem::size_of::<T>()) as *mut T;
-        Some(val)
+        //crate::println!("stack ptr is now: {:?}", self.stack_ptr);
+        Some(unsafe { core::mem::take(&mut *self.stack_ptr) })
     }
 
     // should be manage the overflow???
     fn push(&mut self, val: T) {
+        //crate::println!("stack ptr is: {:?}", self.stack_ptr);
+        //crate::println!("somethign pushed");
         unsafe { *self.stack_ptr = val };
         self.stack_ptr = ((self.stack_ptr as usize) - core::mem::size_of::<T>()) as *mut T;
+        //crate::println!("stack ptr is now: {:?}", self.stack_ptr);
     }
 }
 
@@ -62,6 +72,7 @@ impl<T: Default> Stack<T> {
 #[derive(Debug)]
 pub struct FrameAllocator {
     max_frame: usize,
+    pub first_avaiable_frame: Frame,
     current_frame: Frame,
     stack: Stack<usize>
 }
@@ -88,12 +99,12 @@ impl FrameAllocator {
         // The frame start from 0
         // Starting from the next frame from the position indicated by the starting point
         // Of course there is some internal framgemntation between starting_point and the next init frame
-        let current_frame = Frame::new(
-            (stack_top as usize)/FRAME_SIZE + if (stack_top as usize) % FRAME_SIZE != 0 { 1 } else { 0 }
-        );
+        let current_frame = Frame::new(stack_top as usize);
+        let first_avaiable_frame = current_frame.clone();
 
         Self {
             max_frame, 
+            first_avaiable_frame,
             current_frame,
             stack
         }
@@ -102,15 +113,15 @@ impl FrameAllocator {
 
 impl Allocator for FrameAllocator {
 
-    fn allocate(&mut self) -> Frame {
+    fn allocate(&mut self) -> Option<Frame> {
         if self.max_frame == self.current_frame.number {
             // the counter is end, search in the the stack
             // panic if all frames are allocated for now
-            Frame::new(self.stack.pop().expect("All frames are allocated"))
+            self.stack.pop().map(|n| Frame::new(n))
         } else {
             let new_frame = self.current_frame.clone();
             self.current_frame = self.current_frame.next();
-            new_frame
+            Some(new_frame)
         }
     }
 
