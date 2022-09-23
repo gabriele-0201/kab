@@ -13,9 +13,17 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(addr: usize) -> Self {
+    /// constructor from a physical address
+    pub fn from_physical_address(addr: paging::PhysicalAddr) -> Self {
         Self { 
-            number: (addr as usize)/FRAME_SIZE + if (addr as usize) % FRAME_SIZE != 0 { 1 } else { 0 } 
+            number: addr.get()/FRAME_SIZE + if addr.get() % FRAME_SIZE != 0 { 1 } else { 0 } 
+        }
+    }
+    
+    /// constructor from a frame number
+    pub fn from_frame_number(frame_number: usize) -> Self {
+        Self { 
+            number: frame_number
         }
     }
 
@@ -83,7 +91,7 @@ impl FrameAllocator {
         // Extract the number of total frame
         // mem_upper and lower are in kilobytes
         let total_memory = 0x100000 + (boot_info.mem_upper.expect("Mem Upper not present in multiboot information") * 0x400);
-        crate::println!("tot mem: {}", total_memory);
+        //crate::println!("tot mem: {}", total_memory);
         let max_frame = total_memory / FRAME_SIZE;
 
         // set up the stack ptr
@@ -99,7 +107,7 @@ impl FrameAllocator {
         // The frame start from 0
         // Starting from the next frame from the position indicated by the starting point
         // Of course there is some internal framgemntation between starting_point and the next init frame
-        let current_frame = Frame::new(stack_top as usize);
+        let current_frame = Frame::from_physical_address(PhysicalAddr::new(stack_top as usize));
         let first_avaiable_frame = current_frame.clone();
 
         Self {
@@ -117,7 +125,7 @@ impl Allocator for FrameAllocator {
         if self.max_frame == self.current_frame.number {
             // the counter is end, search in the the stack
             // panic if all frames are allocated for now
-            self.stack.pop().map(|n| Frame::new(n))
+            self.stack.pop().map(|n| Frame::from_frame_number(n))
         } else {
             let new_frame = self.current_frame.clone();
             self.current_frame = self.current_frame.next();

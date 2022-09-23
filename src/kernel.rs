@@ -88,7 +88,53 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
     println!("Address TOP stack: 0x{:X}", stack_position);
     */
 
-    let memory_manager = memory_manager::MemoryManager::new(stack_kernel_top, &boot_info);
+    let mut memory_manager = memory_manager::MemoryManager::new(stack_kernel_top, &boot_info);
+
+    println!("Paging Enabled!");
+
+    /* this seems to be ok
+    println!("page directory[0]: {}", memory_manager.page_directory[0]);
+    for i in 0..3 {
+        println!("AFTER PTE[{}]: {}", i,  memory_manager.page_directory[0].get_page_table()[i]);
+    }
+    */
+
+    // TEST paging
+    use memory_manager::{ paging::{ PhysicalAddr, VirtualAddr }, frame_allocator::Frame};
+    
+    // TODO remove all the pub
+    use vga_buffer::{ ScreenChar, ColorCode, Color };
+    // test mapping 1GB to the frame that contain the vga buffer
+
+
+    /* THIS cannot work done after the page is enable....
+    let virtual_vga_buffer = VirtualAddr::new(0x40000000);
+    let physical_vga_buffer = PhysicalAddr::new(0x8B000);
+
+    memory_manager.map_addr(virtual_vga_buffer.clone(), physical_vga_buffer).expect("Impossible address mapping");
+
+    let pde_index = virtual_vga_buffer.get_pd_index();
+    println!("page directory[{}]: {}", pde_index,  memory_manager.page_directory[pde_index]);
+
+    let pte_index = virtual_vga_buffer.get_pt_index();
+    println!("page table[{}]: {}", pte_index, memory_manager.page_directory[pde_index].get_page_table()[pte_index]);
+    */
+
+    /*
+    unsafe  {
+        use volatile::Volatile;
+
+        let buffer: &mut [[Volatile<ScreenChar>; 80]; 25] = &mut *(0x40000000 as *mut [[Volatile<ScreenChar>; 80]; 25]);
+
+        for i in 0..80 {
+            buffer[0][i].write(ScreenChar {
+                ascii_character: b'c',
+                color_code: ColorCode::new(Color::Blue, Color::Black)
+            });
+        }
+        //println!("first_char = {:?}", first_char);
+    }
+    */
 
     loop {}
 }
