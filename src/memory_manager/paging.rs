@@ -213,7 +213,7 @@ impl PageDirectoryEntry {
         (self.0 & attribute) == attribute
     }
 
-    fn get_value(&self) -> u32 {
+    pub fn get_value(&self) -> u32 {
         self.0 
     }
 

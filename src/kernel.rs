@@ -101,35 +101,75 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
 
     // TEST paging
     use memory_manager::{ paging::{ PhysicalAddr, VirtualAddr }, frame_allocator::Frame};
+    use vga_buffer::{ ScreenChar, ColorCode, Color };
 
-    let vga_virtual = 0x40000000;
+    unsafe  {
+        let cell = ScreenChar{
+            ascii_character: b' ',
+            color_code: ColorCode::new(Color::Yellow, Color::Black)
+        };
 
-        let pde_index = virtual_vga_buffer.get_pd_index();
-        let pde = m.page_directory[pde_index];
-        crate::println!("page directory[{}]: {}", pde_index, pde);
+        crate::println!("The value should be: 0x{:X}", *((&cell as *const ScreenChar) as *const u16));
+
+        let vga_virtual = VirtualAddr::new(0x40000000);
+        let vga_physical = VirtualAddr::new(0xb8000);
+
+        let pde_index = vga_virtual.get_pd_index();
+        let pde = memory_manager.page_directory[pde_index];
+        crate::println!("page directory[{}]: 0x{:X}", pde_index, pde.get_value());
 
         let page_table = pde.get_page_table();
         crate::println!("page table address {}", page_table.get_physical_addr());
 
-        let pte_index = virtual_vga_buffer.get_pt_index();
+        let pte_index = vga_virtual.get_pt_index();
         let pte = page_table[pte_index];
-        crate::println!("page directory[{}] -> page table[{}]: {}", pde_index, pte_index, pte);
+        crate::println!("page directory[{}] -> page table[{}]: 0x{:X}", pde_index, pte_index, pte.get_value());
     
-    // TODO remove all the pub
-    use vga_buffer::{ ScreenChar, ColorCode, Color };
-    // test mapping 1GB to the frame that contain the vga buffer
+        // TODO remove all the pub
 
-    unsafe  {
+        let ptr = &mut *(vga_virtual.get() as *mut u16);
+        println!("elem at the virtual address: 0x{:X}", *ptr);
+        ptr = 231;
+        println!("elem at the virtual address MODIFIED: 0x{:X}", *ptr);
+
+        //memory_manager::flush_tlb_entry(vga_physical.get() as usize);
+
+        let ptr = &mut *(vga_physical.get() as *mut u16);
+        println!("elem at the phyisical address: 0x{:X}", *ptr);
+        *ptr = 231;
+        println!("elem at the virtual address MODIFIED: 0x{:X}", ptr);
+
+        //memory_manager::flush_tlb_entry(vga_physical.get() as usize);
+
+        let ptr = &mut *(vga_physical.get() as *mut u16);
+        println!("elem at the phyisical address after modified: 0x{:X}", *ptr);
+        
+        // Test using volatile
         use volatile::Volatile;
+        let ptr = &mut *(vga_virtual.get() as *mut Volatile<u16>);
+        println!("elem at the phyisical address: {:?}", ptr);
+        ptr.write(231);
+        println!("elem at the virtual address MODIFIED: {:?}", ptr);
 
-        let buffer = &mut *( as *mut [[Volatile<ScreenChar>; 80]; 25]);
+        memory_manager::flush_tlb_entry(vga_virtual.get() as usize);
+
+        let ptr = &mut *(vga_physical.get() as *mut Volatile<u16>);
+        println!("elem at the phyisical address after modified: {:?}", ptr);
+
+        /*
+        struct Buffer {
+            chars: [[Volatile<ScreenChar>; 80]; 25],
+        }
+
+        let buffer = &mut *( vga_physical.get() as *mut Buffer);
 
         for i in 0..80 {
-            buffer[0][i].write(ScreenChar {
-                ascii_character: b'c',
+            buffer.chars[0][i].write(ScreenChar {
+                ascii_character: b' ',
                 color_code: ColorCode::new(Color::Blue, Color::Black)
             });
         }
+        */
     }
 
     loop {}

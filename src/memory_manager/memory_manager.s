@@ -20,3 +20,12 @@
         mov cr0, eax
         pop eax
         ret
+
+// flush_tlb_entry(virtual_addr)
+.global flush_tlb_entry
+    flush_tlb_entry:
+        cli
+		invlpg [eax]
+		sti
+        ret
+

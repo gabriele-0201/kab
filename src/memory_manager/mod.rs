@@ -14,6 +14,7 @@ use paging::*;
 extern "C" {
     pub fn change_page_directory(page_direcotry_ptr: usize);
     pub fn enable_paging();
+    pub fn flush_tlb_entry(virtual_addr_ptr: usize);
 }
 
 pub struct MemoryManager {
@@ -95,20 +96,21 @@ impl MemoryManager {
 
         // TEST remap the vga buffer
         let mut m = Self {
-            page_directory: page_directory.clone(),
+            page_directory,
             frame_allocator
         };
 
         let virtual_vga_buffer = VirtualAddr::new(0x40000000);
-        let physical_vga_buffer = PhysicalAddr::new(0x8B000);
+        let physical_vga_buffer = PhysicalAddr::new(0xb8000);
 
         m.map_addr_without_paging(
             virtual_vga_buffer.clone(), 
             physical_vga_buffer,
-            PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32 | PageDirectoryFlag::Writethrough as u32 | PageDirectoryFlag::NotCacheable as u32,
-            PageTableFlag::Present as u32 | PageTableFlag::Writable as u32 | PageTableFlag::Writethrough as u32 | PageDirectoryFlag::NotCacheable as u32
+            PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32 | PageDirectoryFlag::NotCacheable as u32,
+            PageTableFlag::Present as u32 | PageTableFlag::Writable as u32 | PageDirectoryFlag::NotCacheable as u32
         ).expect("Impossible address mapping");
 
+        /*
         crate::println!("virtual address: {}", virtual_vga_buffer);
         let pde_index = virtual_vga_buffer.get_pd_index();
         let pde = m.page_directory[pde_index];
@@ -120,10 +122,14 @@ impl MemoryManager {
         let pte_index = virtual_vga_buffer.get_pt_index();
         let pte = page_table[pte_index];
         crate::println!("page directory[{}] -> page table[{}]: {}", pde_index, pte_index, pte);
+
+        crate::println!("Page directory address: {}", m.page_directory.get_physical_addr());
+        */
+
         
         unsafe {
             // Change pd
-            change_page_directory(page_directory.get_physical_addr().get());
+            change_page_directory(m.page_directory.get_physical_addr().get());
 
             // enable paging
             enable_paging();
