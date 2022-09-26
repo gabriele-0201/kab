@@ -117,7 +117,12 @@ impl PageDirectory {
         PhysicalAddr::new(self.entries as usize)
     }
 
-    pub fn alloc_new_page_table(&mut self, frame_allocator: &mut FrameAllocator, index: usize) -> Result<PageTable, &'static str> {
+    pub fn alloc_new_page_table(
+        &mut self, 
+        frame_allocator: &mut FrameAllocator, 
+        index: usize,
+        flags: u32
+    ) -> Result<PageTable, &'static str> {
         // should call the constructor of the page table that will 
         // allocate the new frame, initialize the page table
         // than get the address of that table and enable the entry
@@ -126,8 +131,7 @@ impl PageDirectory {
 
         //crate::println!("Allocated page table: {:?}", table.get_physical_addr());
 
-        self[index].add_attribute(PageDirectoryFlag::Present as u32);
-        self[index].add_attribute(PageDirectoryFlag::Writable as u32);
+        self[index].add_attribute(flags);
         self[index].set_frame(Frame::from_physical_address(table.get_physical_addr()));
 
         // hope that the move semantics does not cause errors
@@ -161,8 +165,8 @@ pub enum PageDirectoryFlag {
 	Present			=	1,		//0000000000000000000000000000001
 	Writable		=	2,		//0000000000000000000000000000010
 	User			=	4,		//0000000000000000000000000000100
-	Pwt			    =	8,		//0000000000000000000000000001000
-	Pcd			    =	0x10,		//0000000000000000000000000010000
+	Writethrough	=	8,		//0000000000000000000000000001000
+	NotCacheable	=	0x10,		//0000000000000000000000000010000
 	Accessed		=	0x20,		//0000000000000000000000000100000
 	Dirty			=	0x40,		//0000000000000000000000001000000
 	BigPage			=	0x80,		//0000000000000000000000010000000 4MB page
@@ -228,8 +232,6 @@ impl fmt::Display for PageDirectoryEntry {
 }
 
 // TABLE
-// How will work the move semantics???????
-// The pointer is just moved right?
 #[repr(transparent)]
 pub struct PageTable {
     entries: *mut [PageTableEntry; ENTRIES_PER_PAGE]
@@ -284,7 +286,12 @@ impl PageTable {
         PhysicalAddr::new(self.entries as usize)
     }
 
-    pub fn alloc_new_page(&mut self, frame_allocator: &mut FrameAllocator, index: usize) -> Result<(), &'static str> {
+    pub fn alloc_new_page(
+        &mut self, 
+        frame_allocator: &mut FrameAllocator, 
+        index: usize,
+        flags: u32
+    ) -> Result<(), &'static str> {
 
         let new_frame = frame_allocator.allocate();
 
@@ -299,8 +306,7 @@ impl PageTable {
             return Err("Entry has a page already allocated, deallocation should be managed")
         }
 
-        self[index].add_attribute(PageTableFlag::Present as u32);
-        self[index].add_attribute(PageTableFlag::Writable as u32);
+        self[index].add_attribute(flags);
         self[index].set_frame(Frame::from_physical_address(new_frame.get_physical_addr()));
 
         Ok(())
@@ -321,7 +327,7 @@ pub enum PageTableFlag {
 	Present			=	1,		//0000000000000000000000000000001
 	Writable		=	2,		//0000000000000000000000000000010
 	User			=	4,		//0000000000000000000000000000100
-	Writethough		=	8,		//0000000000000000000000000001000
+	Writethrough	=	8,		//0000000000000000000000000001000
 	NotCacheable	=	0x10,		//0000000000000000000000000010000
 	Accessed		=	0x20,		//0000000000000000000000000100000
 	Dirty			=	0x40,		//0000000000000000000000001000000
@@ -367,7 +373,7 @@ impl PageTableEntry {
         (self.0 & attribute) == attribute
     }
 
-    fn get_value(&self) -> u32 {
+    pub fn get_value(&self) -> u32 {
         self.0
     }
 

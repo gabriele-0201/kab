@@ -56,7 +56,11 @@ impl MemoryManager {
         let mut page_directory = PageDirectory::new(&mut frame_allocator);
 
         // setting up identity paging -> NOT sure this is working
-        let mut identity_table = page_directory.alloc_new_page_table(&mut frame_allocator, 0).expect("Impossible allocate page table");
+        let mut identity_table = page_directory.alloc_new_page_table(
+            &mut frame_allocator, 
+            0,
+            PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32
+        ).expect("Impossible allocate page table");
         
         for i in 0..ENTRIES_PER_PAGE { // loop for 1024 page - frame
             let frame = Frame::from_frame_number(i);
@@ -71,7 +75,11 @@ impl MemoryManager {
         // SHOULD be done something better to manage kernel bigger that 3MiB
         let virtual_addr_map_kernel = VirtualAddr::new(0xC0000000);
         crate::println!("staring hhf page direcototy entry number: {}", virtual_addr_map_kernel.get_pd_index());
-        let mut hhf_table = page_directory.alloc_new_page_table(&mut frame_allocator, virtual_addr_map_kernel.get_pd_index()).expect("Impossible allocate page table");
+        let mut hhf_table = page_directory.alloc_new_page_table(
+            &mut frame_allocator, 
+            virtual_addr_map_kernel.get_pd_index(),
+            PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32
+        ).expect("Impossible allocate page table");
 
         //crate::println!("start frame: 0x{:X}", kernel_start_frame);
         //crate::println!("end frame: 0x{:X}", kernel_start_frame + ENTRIES_PER_PAGE);
@@ -94,14 +102,24 @@ impl MemoryManager {
         let virtual_vga_buffer = VirtualAddr::new(0x40000000);
         let physical_vga_buffer = PhysicalAddr::new(0x8B000);
 
-        m.map_addr(virtual_vga_buffer.clone(), physical_vga_buffer).expect("Impossible address mapping");
+        m.map_addr_without_paging(
+            virtual_vga_buffer.clone(), 
+            physical_vga_buffer,
+            PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32 | PageDirectoryFlag::Writethrough as u32 | PageDirectoryFlag::NotCacheable as u32,
+            PageTableFlag::Present as u32 | PageTableFlag::Writable as u32 | PageTableFlag::Writethrough as u32 | PageDirectoryFlag::NotCacheable as u32
+        ).expect("Impossible address mapping");
 
+        crate::println!("virtual address: {}", virtual_vga_buffer);
         let pde_index = virtual_vga_buffer.get_pd_index();
-        crate::println!("page directory[{}]: {}", pde_index,  m.page_directory[pde_index]);
+        let pde = m.page_directory[pde_index];
+        crate::println!("page directory[{}]: {}", pde_index, pde);
+
+        let page_table = pde.get_page_table();
+        crate::println!("page table address {}", page_table.get_physical_addr());
 
         let pte_index = virtual_vga_buffer.get_pt_index();
-        // WHY THE FUCK THIS IS WRONG????
-        crate::println!("page table[{}]: {}", pte_index, m.page_directory[pde_index].get_page_table()[pte_index]);
+        let pte = page_table[pte_index];
+        crate::println!("page directory[{}] -> page table[{}]: {}", pde_index, pte_index, pte);
         
         unsafe {
             // Change pd
@@ -129,38 +147,41 @@ impl MemoryManager {
     /// This function will map a virtual_addr to a specific physical_addr
     /// This mean that when paging is enabled to refer a particular pyshical address we have to
     /// pass throught this virtual addr
-    pub fn map_addr(&mut self, virt_addr: VirtualAddr, physic_addr: PhysicalAddr) -> Result<(), &'static str> {
+    pub fn map_addr_without_paging(
+            &mut self, 
+            virt_addr: VirtualAddr, 
+            physic_addr: PhysicalAddr,
+            pd_flag: u32,
+            pt_flag: u32
+    ) -> Result<(), &'static str> {
 
         // the pointer is not really pointing to the page directory, only if inside the
         // identity mapping
         // How manage this if paging is enable?
-        //let page_directory = unsafe { *self.page_directory };
         
         // Get the corret PageDirectoryEntry
-        let pde = self.page_directory[virt_addr.get_pd_index()];
-        let page_table: PageTable;
+        let mut page_table: PageTable;
 
         // Is this pde valid?
-        if !pde.is_valid_flag(PageDirectoryFlag::Present as u32) {
+        if !self.page_directory[virt_addr.get_pd_index()].is_valid_flag(PageDirectoryFlag::Present as u32) {
             // if the pde is not present than alloc a new page table 
             // and validate the page directory entry
-            //crate::println!("Page entry n: {}, a new page table is allocated", virt_addr.get_pd_index());
-            page_table = self.page_directory.alloc_new_page_table(&mut self.frame_allocator, virt_addr.get_pd_index())?;
+            page_table = self.page_directory.alloc_new_page_table(&mut self.frame_allocator, virt_addr.get_pd_index(), pd_flag)?;
         } else {
-            page_table = pde.get_page_table();
+            page_table = self.page_directory[virt_addr.get_pd_index()].get_page_table();
         }
 
-        let mut pte = page_table[virt_addr.get_pt_index()];
+        self.page_directory[virt_addr.get_pd_index()].add_attribute(pd_flag);
+        
+        //let pte_index = virt_addr.get_pt_index();
+        let pte = &mut page_table[virt_addr.get_pt_index()];
+
         if pte.is_valid_flag(PageTableFlag::Present as u32) {
             return Err("Page already present, should be deallocated and managed")
         }
 
-        pte.add_attribute(PageTableFlag::Present as u32);
-        pte.add_attribute(PageTableFlag::Writable as u32);
+        pte.add_attribute(pt_flag);
         pte.set_frame(Frame::from_physical_address(physic_addr));
-
-        crate::println!("page direcotry entry in use: {}", self.page_directory[virt_addr.get_pd_index()]);
-        crate::println!("just setted pte: {}", pte);
 
         Ok(())
     }
