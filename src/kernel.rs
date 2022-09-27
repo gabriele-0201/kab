@@ -112,7 +112,8 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
         crate::println!("The value should be: 0x{:X}", *((&cell as *const ScreenChar) as *const u16));
 
         let vga_virtual = VirtualAddr::new(0x40000000);
-        let vga_physical = VirtualAddr::new(0xb8000);
+        //let vga_physical = PhysicalAddr::new(0xb8000);
+        let vga_physical = PhysicalAddr::new(0x300000);
 
         let pde_index = vga_virtual.get_pd_index();
         let pde = memory_manager.page_directory[pde_index];
@@ -129,13 +130,14 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
 
         let ptr = &mut *(vga_virtual.get() as *mut u16);
         println!("elem at the virtual address: 0x{:X}", *ptr);
-        ptr = 231;
+        *ptr = 231;
         println!("elem at the virtual address MODIFIED: 0x{:X}", *ptr);
 
         //memory_manager::flush_tlb_entry(vga_physical.get() as usize);
 
         let ptr = &mut *(vga_physical.get() as *mut u16);
         println!("elem at the phyisical address: 0x{:X}", *ptr);
+        /*
         *ptr = 231;
         println!("elem at the virtual address MODIFIED: 0x{:X}", ptr);
 
@@ -155,6 +157,7 @@ pub extern "C" fn kernel_main(multiboot_magic_number: usize, multiboot_informati
 
         let ptr = &mut *(vga_physical.get() as *mut Volatile<u16>);
         println!("elem at the phyisical address after modified: {:?}", ptr);
+        */
 
         /*
         struct Buffer {

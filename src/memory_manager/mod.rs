@@ -101,7 +101,8 @@ impl MemoryManager {
         };
 
         let virtual_vga_buffer = VirtualAddr::new(0x40000000);
-        let physical_vga_buffer = PhysicalAddr::new(0xb8000);
+        //let physical_vga_buffer = PhysicalAddr::new(0xb8000);
+        let physical_vga_buffer = PhysicalAddr::new(0x300000);
 
         m.map_addr_without_paging(
             virtual_vga_buffer.clone(), 
