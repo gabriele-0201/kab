@@ -1,7 +1,9 @@
+use super::WRITER;
 use volatile::Volatile;
 use core::fmt;
-use lazy_static::lazy_static;
-use spin::Mutex;
+use super::concurrency::spin_mutex::{ SpinMutex, SpinGuard };
+//use lazy_static::lazy_static;
+//use spin::Mutex;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,11 +37,17 @@ impl ColorCode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct ScreenChar {
     pub ascii_character: u8,
     pub color_code: ColorCode,
+}
+
+impl fmt::Display for ScreenChar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "character: {}, ColorCode: {:?}", self.ascii_character as char, self.color_code)
+    }
 }
 
 const BUFFER_HEIGHT: usize = 25;
@@ -47,16 +55,43 @@ const BUFFER_WIDTH: usize = 80;
 
 #[repr(transparent)]
 struct Buffer {
-    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+    //chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+    chars: [[ScreenChar; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
 pub struct Writer {
     column_position: usize,
     color_code: ColorCode,
-    buffer: &'static mut Buffer,
+    //buffer: &'static mut Buffer,
+    buffer: *mut Buffer,
 }
 
 impl Writer {
+
+    // This function will init the WRITER static variable
+    pub fn init() {
+
+        unsafe {
+            WRITER.init(
+                SpinMutex::new(Writer {
+                    column_position: 0,
+                    color_code: ColorCode::new(Color::Yellow, Color::Black),
+                    //buffer: &mut *(0xb8000 as *mut Buffer),
+                    buffer: 0xb8000 as *mut Buffer,
+                })
+            );
+        }
+    }
+
+    // TEST
+    pub fn change_ptr_buffer(&mut self, new_buffer_addr: usize) {
+        self.buffer = unsafe { &mut *(new_buffer_addr as *mut Buffer) } 
+    }
+
+    pub fn get_buffer_addr(&self) -> usize {
+        self.buffer as *const Buffer as usize
+    }
+
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
@@ -69,10 +104,22 @@ impl Writer {
                 let col = self.column_position;
 
                 let color_code = self.color_code;
-                self.buffer.chars[row][col].write(ScreenChar {
+                //unsafe{ *self.buffer }.chars[row][col].write(ScreenChar {
+                unsafe { 
+                    core::ptr::write_volatile(
+                        &mut ((*self.buffer).chars[row][col]) as *mut ScreenChar,
+                        ScreenChar {
+                            ascii_character: byte,
+                            color_code,
+                        }
+                    );
+                };
+                /*
+                self.buffer.chars[row][col] = ScreenChar {
                     ascii_character: byte,
                     color_code,
-                });
+                };
+                */
                 self.column_position += 1;
             }
         }
@@ -81,8 +128,19 @@ impl Writer {
     fn new_line(&mut self) {
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
-                let character = self.buffer.chars[row][col].read();
-                self.buffer.chars[row - 1][col].write(character);
+                /*
+                let character = self.buffer.chars[row][col]/*.read()*/;
+                //self.buffer.chars[row - 1][col].write(character);
+                self.buffer.chars[row - 1][col] = character;
+                */
+                unsafe {
+                    let buffer = &mut *self.buffer;
+                    let character = core::ptr::read_volatile(&buffer.chars[row][col] as *const ScreenChar);
+                    core::ptr::write_volatile(
+                        &mut (buffer.chars[row - 1][col]) as *mut ScreenChar,
+                        character
+                    );
+                }
             }
         }
         self.clear_row(BUFFER_HEIGHT - 1);
@@ -95,7 +153,14 @@ impl Writer {
             color_code: self.color_code,
         };
         for col in 0..BUFFER_WIDTH {
-            self.buffer.chars[row][col].write(blank);
+            //self.buffer.chars[row][col].write(blank);
+            //self.buffer.chars[row][col] = blank;
+            unsafe {
+                core::ptr::write_volatile(
+                    &mut ((*self.buffer).chars[row][col]) as *mut ScreenChar,
+                    blank
+                );
+            }
         }
     }
 
@@ -126,13 +191,16 @@ impl fmt::Write for Writer {
     }
 }
 
+/*
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+    (pub) static WRITER: SpinMutex<Writer> = SpinMutex::new(Writer {
         column_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-    });
+        //buffer: 0xb8000 as *const Buffer,
+    })
 }
+*/
 
 #[macro_export]
 macro_rules! print {
@@ -151,7 +219,9 @@ pub(crate) use print;
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap();
+    // This has to be unsafe until I find a way to have something static but
+    // I can initialize on runtime
+    unsafe { WRITER.lock().write_fmt(args).unwrap(); }
 }
 
 /* OLD

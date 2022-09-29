@@ -68,6 +68,7 @@ impl MemoryManager {
             
             identity_table[i].add_attribute(PageTableFlag::Present as u32);
             identity_table[i].add_attribute(PageTableFlag::Writable as u32);
+            identity_table[i].add_attribute(PageTableFlag::NotCacheable as u32);
             identity_table[i].set_frame(frame);
 
         }
@@ -101,8 +102,9 @@ impl MemoryManager {
         };
 
         let virtual_vga_buffer = VirtualAddr::new(0x40000000);
-        //let physical_vga_buffer = PhysicalAddr::new(0xb8000);
-        let physical_vga_buffer = PhysicalAddr::new(0x300000);
+        let physical_vga_buffer = PhysicalAddr::new(0xb8000);
+        let virtual_test_address = VirtualAddr::new(0x40001000);
+        let physical_test_address = PhysicalAddr::new(0x300000);
 
         m.map_addr_without_paging(
             virtual_vga_buffer.clone(), 
@@ -111,22 +113,12 @@ impl MemoryManager {
             PageTableFlag::Present as u32 | PageTableFlag::Writable as u32 | PageDirectoryFlag::NotCacheable as u32
         ).expect("Impossible address mapping");
 
-        /*
-        crate::println!("virtual address: {}", virtual_vga_buffer);
-        let pde_index = virtual_vga_buffer.get_pd_index();
-        let pde = m.page_directory[pde_index];
-        crate::println!("page directory[{}]: {}", pde_index, pde);
-
-        let page_table = pde.get_page_table();
-        crate::println!("page table address {}", page_table.get_physical_addr());
-
-        let pte_index = virtual_vga_buffer.get_pt_index();
-        let pte = page_table[pte_index];
-        crate::println!("page directory[{}] -> page table[{}]: {}", pde_index, pte_index, pte);
-
-        crate::println!("Page directory address: {}", m.page_directory.get_physical_addr());
-        */
-
+        m.map_addr_without_paging(
+            virtual_test_address, 
+            physical_test_address,
+            PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32 /*| PageDirectoryFlag::NotCacheable as u32*/,
+            PageTableFlag::Present as u32 | PageTableFlag::Writable as u32 /*| PageDirectoryFlag::NotCacheable as u32*/
+        ).expect("Impossible address mapping");
         
         unsafe {
             // Change pd
