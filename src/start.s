@@ -21,11 +21,13 @@
 
 // data initialized to zeros when the kernel is loaded
 .section .bss
-    // C code need a stack
+    // Prepare heap and stack space
+    heap_bottom:
+        .skip 4 * 1024 // 4KiB
+    heap_top:
     .align 16 // WHY?
     stack_bottom:
-        .skip 1048576 * 1 // 1MB
-//        .skip 4096 // 1MB
+        .skip 1048576 * 1 // 1MB <- why not 1024*1024?
     stack_top:
 
 .section .text
@@ -33,14 +35,14 @@
     start: 
         //mov $stack_top, %esp
         lea esp, stack_top
-        //mov edi, eax // mov Multiboot flag
-        //mov esi, ebx // mov Multiboot info
+        lea ecx, heap_bottom
+        lea edx, heap_top
 
-        push esp // TEST push th stack position
-        push ebx // mov Multiboot info
-        push eax // mov Multiboot flag
-
-
+        push esp // push stack top position
+        push edx // push heap top position
+        push ecx // push heap bottom position
+        push ebx // push Multiboot info
+        push eax // push Multiboot flag
 
         // now the environment is ready, start the code
         call kernel_main

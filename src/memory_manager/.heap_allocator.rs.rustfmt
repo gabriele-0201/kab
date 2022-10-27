@@ -1,0 +1,158 @@
+use super::{ paging::VirtualAddr };
+use core::alloc::{ GlobalAlloc, Layout };
+
+/// HeapAllocator will use some sort of linked list
+/// where each HeapHead will contain the dim of the allocated space and
+/// a ptr to the next allocated space (another HeapHead)
+///
+/// Algorithm:
+///
+/// At the first allocation the heap is totally free, in fact current
+/// head_of_heap_head is None so the thing to do is: set a new HeapHead
+/// at the beginning of the heap (always with a dimension check)
+///
+///
+pub struct HeapAllocator {
+    start_heap: VirtualAddr,
+    head_of_heap_head: Option<*mut HeapHead>,
+    end_heap: VirtualAddr
+}
+
+#[derive(Clone)]
+enum Next {
+    HeapHead(*mut HeapHead),
+    Tail(VirtualAddr)
+}
+
+/// Keep the pointer to the next HeapHead and the current dim
+#[derive(Clone)]
+struct HeapHead {
+    next: Next,
+    dim: usize
+}
+
+struct HeapHeadIterator {
+    curr: *mut HeapHead
+}
+
+impl HeapHead {
+    /// this function is similar to a constructor with the only difference that
+    /// does not return a new HeapHead but write it on the passed address with
+    /// the specified properties
+    ///
+    /// Does not return any error, it must be unsafe because you could overwrite 
+    /// thigs you wouldn't
+    fn set_new(heap_head: &VirtualAddr, next: Next, layout: Layout) {
+        let dim = layout.size();
+        // have to do something about alignent
+        unsafe {
+            (heap_head.get() as *mut HeapHead).write_volatile(
+                HeapHead {
+                    next,
+                    dim
+                }
+            );
+        }
+    }
+
+    fn insert_after(&mut self, layout: Layout) -> bool {
+        todo!()
+    }
+
+    fn get_adiacent_free_space() -> u32 {
+        todo!()
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        unsafe  {
+            (self as *const HeapHead).offset(core::mem::size_of::<HeapHead>() as isize) as *mut u8
+        }
+    }
+}
+
+impl IntoIterator for HeapHead {
+    type Item = HeapHead;
+    type IntoIter = HeapHeadIterator;
+
+    /// TODO: understand why here we does not accept &self or &mut self
+    fn into_iter(mut self) -> Self::IntoIter {
+        HeapHeadIterator {
+            curr: &mut self as *mut HeapHead,
+        }
+    }
+}
+
+impl Iterator for HeapHeadIterator {
+    type Item = HeapHead;
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        let curr_heap_head = unsafe { &*self.curr };
+
+        match curr_heap_head.next {
+            Next::HeapHead(ptr) => {
+                self.curr = ptr
+            }, 
+            Next::Tail(_) => {
+                return None
+            }
+        }
+
+
+        Some(curr_heap_head.clone())
+    }
+}
+
+/// 
+impl HeapAllocator {
+    pub fn new(start_heap: VirtualAddr, end_heap: VirtualAddr) -> HeapAllocator {
+        HeapAllocator {
+            start_heap, 
+            head_of_heap_head: None,
+            end_heap
+        }
+    }
+}
+
+/// Let's start creating a bump allocator
+unsafe impl GlobalAlloc for HeapAllocator {
+
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+
+        if self.head_of_heap_head.is_none() {
+            // layout must be <= heap size
+            HeapHead::set_new(&self.start_heap, Next::Tail(self.end_heap.clone()), layout);
+
+            // TODO this cast could be better
+            return (*(self.start_heap.get() as *const HeapHead)).get_ptr()
+        }
+
+        // here now we have to make sure that the first heap_head is at the start,
+        // oherwise check if is possible to create a new head_of_heap_heads
+        if self.start_heap.get() == self.head_of_heap_head.expect("Something break in HeapAllocator, Head of heap_heads is null") as usize {
+            todo!()
+        }
+
+        // now I will loop in the liked list and check for every heap_head
+        // if accept the requested layout in fornt of it
+        
+        let mut h_iter = unsafe { &*(self.head_of_heap_head.expect("Something break in HeapAllocator, Head of heap_heads is null")) }.clone().into_iter();
+
+        while let Some(heap_head) = h_iter.next() {
+
+            // not sure if is possible to modify the stufff inside the iterator
+            if heap_head.insert_after(layout) {
+                return h_iter.next().expect("Impossible unwrap just insered HeapHead").get_ptr()
+            }
+
+        }
+
+        return core::ptr::null_mut();
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        
+    }
+
+}
+

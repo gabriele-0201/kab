@@ -1,9 +1,8 @@
-use super::WRITER;
-use volatile::Volatile;
+use super::{
+    concurrency::spin_mutex::SpinMutex,
+    runtime_static::RuntimeStatic
+};
 use core::fmt;
-use super::concurrency::spin_mutex::{ SpinMutex, SpinGuard };
-//use lazy_static::lazy_static;
-//use spin::Mutex;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -201,6 +200,11 @@ lazy_static! {
     })
 }
 */
+
+// should I make it mutable?
+// done like this ONLY for now
+// TODO remove `pub`
+pub static mut WRITER: RuntimeStatic<SpinMutex<Writer>> = RuntimeStatic::get_uninit();
 
 #[macro_export]
 macro_rules! print {

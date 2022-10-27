@@ -15,6 +15,3 @@ overflow-checks = false
 [profile.release]
 panic = "abort"
 overflow-checks = false
-
-[dependencies]
-volatile = "0.2.6"

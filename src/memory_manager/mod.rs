@@ -7,6 +7,8 @@ const ENTRIES_PER_PAGE: usize = 1024;
 
 pub mod frame_allocator;
 pub mod paging;
+pub mod global_allocator;
+pub mod heap_allocator;
 
 use frame_allocator::{ Frame, FrameAllocator, Allocator };
 use paging::*;
@@ -49,8 +51,7 @@ impl MemoryManager {
 
         // FOR NOW from 1MiB to 5MiB (dim = 4MiB)
         // should be from 1MiB to stack_top = starting_point (dim = stack_top - 1MiB)
-        let kernel_dimension = 4 * 1024 * 1024;
-        let kernel_end = kernel_base + kernel_dimension;
+        let kernel_dimension = 4 * 1024 * 1024; let kernel_end = kernel_base + kernel_dimension;
         let kernel_end_frame = kernel_end / FRAME_SIZE;
         
         // create a new page directory
@@ -76,7 +77,6 @@ impl MemoryManager {
         // HHF : 0x10000000 => 0xC0000000
         // SHOULD be done something better to manage kernel bigger that 3MiB
         let virtual_addr_map_kernel = VirtualAddr::new(0xC0000000);
-        crate::println!("staring hhf page direcototy entry number: {}", virtual_addr_map_kernel.get_pd_index());
         let mut hhf_table = page_directory.alloc_new_page_table(
             &mut frame_allocator, 
             virtual_addr_map_kernel.get_pd_index(),
@@ -103,21 +103,12 @@ impl MemoryManager {
 
         let virtual_vga_buffer = VirtualAddr::new(0x40000000);
         let physical_vga_buffer = PhysicalAddr::new(0xb8000);
-        let virtual_test_address = VirtualAddr::new(0x40001000);
-        let physical_test_address = PhysicalAddr::new(0x300000);
 
         m.map_addr_without_paging(
             virtual_vga_buffer.clone(), 
             physical_vga_buffer,
             PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32 | PageDirectoryFlag::NotCacheable as u32,
             PageTableFlag::Present as u32 | PageTableFlag::Writable as u32 | PageDirectoryFlag::NotCacheable as u32
-        ).expect("Impossible address mapping");
-
-        m.map_addr_without_paging(
-            virtual_test_address, 
-            physical_test_address,
-            PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32 /*| PageDirectoryFlag::NotCacheable as u32*/,
-            PageTableFlag::Present as u32 | PageTableFlag::Writable as u32 /*| PageDirectoryFlag::NotCacheable as u32*/
         ).expect("Impossible address mapping");
         
         unsafe {
