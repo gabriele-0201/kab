@@ -32,6 +32,11 @@ impl Next {
     }
 }
 
+impl Default for Next {
+    fn default() -> Self {
+        Next::HeapHead(core::ptr::null_mut())
+    }
+}
 /// Keep the pointer to the next HeapHead and the allocated space whith his dimension
 struct HeapHead {
     next: Next,
@@ -50,57 +55,83 @@ impl HeapHead {
     ///
     /// Does not return any error, it must be unsafe because you could overwrite 
     /// thigs you wouldn't
-    fn set_new(heap_head: &VirtualAddr, next: Next, layout: Layout) {
-        let dim = layout.size();
-        // have to do something about alignent
+    unsafe fn write_new(heap_head: *mut HeapHead, next: Next, allocated_space: *mut u8, dim: usize) {
+        heap_head.write_volatile(
+            HeapHead {
+                next,
+                allocated_space,
+                dim
+            }
+        );
+    }
+
+    /// this function is used to create a new HeapHead from a base address
+    /// using only a next element
+    ///
+    /// Example: the first HeapHead that must be allocated
+    fn insert_from(heap_head: *mut HeapHead, layout: Layout, next: Next) -> bool {
+        
+        // Ensure that the layout dimension is less that the avaiable space
+        if layout.size() > (next.get_ptr_usize() - heap_head as usize) {
+            return false;
+        }
+
+        // This could be of course generalized and mixed with the insert new implementation
+        // but I'm relly tired now so I will not do that, hope it at least works
+        let end_heap = heap_head as usize + core::mem::size_of::<HeapHead>() as usize;
+        let required_padding = (end_heap as *mut u8).align_offset(layout.align());
+
         unsafe {
-            (heap_head.get() as *mut HeapHead).write_volatile(
-                HeapHead {
-                    next,
-                    dim
-                }
+            HeapHead::write_new(
+                heap_head,
+                next,
+                (end_heap + required_padding) as *mut u8,
+                layout.size()
             );
         }
+
+        true
     }
 
     /// try to insert a new layout between this HeapHead and the next one,
     /// this function will carry about padding and HeapHead's linked list
     /// management
-    ///
-    /// TODO: manca ancora da fare che? allora c'e' da fare meglio la roba
-    /// del padding e soprattuto ho appena aggiunto a HeapHead anche il pointer
-    /// allo spazio allocato cosi da mettere il padding tra l'HeadHead e lo spazio allocato
-    /// cosi quando rimuvo un HeadHead in maniera implicita mi libero del padding
-    /// e dello spazio allocato
-    ///
     fn insert_after(&mut self, layout: Layout) -> bool {
-        // TODO: something about alignment
 
-        let padding = self.get_needed_padding(layout);
+        let offset_for_allocated_space = self.get_needed_padding(layout) + core::mem::size_of::<HeapHead>();
 
-        if padding + layout.size() + core::mem::size_of::<HeapHead>() <= self.get_adiacent_free_space() {
-            // the adiacent free space is enough so I have to insert a new 
-            // heap_head in the linked list
-            let new_head_head: &mut HeapHead = unsafe { &mut *((self as *const Self as usize + self.dim) as *mut HeapHead) }; 
-            
-            *new_head_head = HeapHead {
-                next: self.next, 
-                dim: layout.size()
-            }
+        if offset_for_allocated_space + layout.size() > self.get_adiacent_free_space() {
+            return false
         }
-        false
+
+        // the adiacent free space is enough so I have to insert a new 
+        // heap_head in the linked list
+        let new_head_head = self.get_end_of_allocated_space() as *mut HeapHead; 
+        let new_allocated_space = (new_head_head as usize + offset_for_allocated_space) as *mut u8;
+
+        // now we have a new heap head that point to the next
+        unsafe { HeapHead::write_new(new_head_head, core::mem::take(&mut self.next), new_allocated_space, layout.size()) };
+
+        //now the current heap head must point to the just created one
+        self.next = Next::HeapHead(new_head_head);
+
+        true
     }
 
     /// Return the needed internal pagging to respect the alignment
     ///
     /// HeapHead |--needed_pagging--| start_allocated_space----
     fn get_needed_padding(&self, layout: Layout) -> usize {
-        layout.align() - (self as *const Self as usize % layout.align())
+        (self.as_ptr() as *mut u8).align_offset(layout.align())
+    }
+
+    fn get_end_of_allocated_space(&self) -> usize {
+        self.allocated_space as usize + self.dim
     }
 
     fn get_adiacent_free_space(&self) -> usize {
         // |heap_head|allocated_space__________|___free_space____|next_heap_head
-        self.next.get_ptr_usize() - (self as *const HeapHead as usize + core::mem::size_of::<HeapHead>() as usize + self.dim)
+        self.next.get_ptr_usize() - self.get_end_of_allocated_space()
     }
 
     fn get_allocated_ptr(&self) -> *mut u8 {
@@ -123,7 +154,6 @@ impl IntoIterator for &mut HeapHead {
     type Item = *mut HeapHead;
     type IntoIter = HeapHeadIterator;
 
-    /// TODO: understand why here we does not accept &self or &mut self
     fn into_iter(self) -> Self::IntoIter {
         HeapHeadIterator {
             curr: self as *mut HeapHead,
@@ -167,26 +197,30 @@ unsafe impl GlobalAlloc for HeapAllocator {
 
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
 
+        macro_rules! try_insert_from_start_heap {
+            ($next: expr) => {
+                if !HeapHead::insert_from(self.start_heap.get() as *mut HeapHead, layout, $next) {
+                    return core::ptr::null_mut();
+                }
+                return self.start_heap.get() as *mut u8
+            }
+        }
         // layout should not be 0 and must be a power of 2
-        
         if self.head_of_heap_head.is_none() {
-            // layout must be <= heap size
-            HeapHead::set_new(&self.start_heap, Next::Tail(self.end_heap.clone()), layout);
-
-            // TODO this cast could be better
-            return (*(self.start_heap.get() as *const HeapHead)).get_allocated_ptr()
+            try_insert_from_start_heap!(Next::Tail(self.end_heap.clone()));
         }
 
         // here now we have to make sure that the first heap_head is at the start,
         // oherwise check if is possible to create a new head_of_heap_heads
-        if self.start_heap.get() == self.head_of_heap_head.expect("Something break in HeapAllocator, Head of heap_heads is null") as usize {
-            todo!()
+        let hohh = self.head_of_heap_head.expect("Something break in HeapAllocator, Head of heap_heads is null");
+        if self.start_heap.get() ==  hohh as usize {
+            try_insert_from_start_heap!(Next::HeapHead(hohh));
         }
 
         // now I will loop in the liked list and check for every heap_head
         // if accept the requested layout in fornt of it
         
-        let mut h_iter = unsafe { &mut *(self.head_of_heap_head.expect("Something break in HeapAllocator, Head of heap_heads is null")) }.into_iter();
+        let mut h_iter = unsafe { &mut *hohh }.into_iter();
 
         while let Some(heap_head) = h_iter.next() {
 
