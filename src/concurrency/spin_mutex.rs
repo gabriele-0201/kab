@@ -23,7 +23,10 @@ impl<T> SpinMutex<T> {
         }
     }
 
-    pub fn lock<'a>(&'a mut self) -> SpinGuard<'a, T> {
+    // TODO: understand WHY It works without mutable
+    // I did that for the globalAllcator static variable that is not mutable
+    //pub fn lock<'a>(&'a mut self) -> SpinGuard<'a, T> {
+    pub fn lock<'a>(&'a self) -> SpinGuard<'a, T> {
         // Try to swap the lock with a true,
         // swap return the previously value
         // if it was false than the mutex is correctly locked
@@ -33,7 +36,8 @@ impl<T> SpinMutex<T> {
 
         SpinGuard{
             lock: &self.lock,
-            data: &mut self.data as *mut T
+            //data: &mut self.data as *mut T
+            data: &self.data as *const T as *mut T
         }
     }
 }

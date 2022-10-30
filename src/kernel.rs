@@ -1,5 +1,7 @@
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
+#![feature(alloc_error_handler)]
+// TODO: remove this feature, used only once for stupid thing
 #![feature(pointer_byte_offsets)]
 
             
@@ -19,13 +21,29 @@ mod memory_manager;
 mod concurrency;
 mod runtime_static;
 
+extern crate alloc;
+
 use core::panic::PanicInfo;
+use memory_manager::heap_allocator::HeapAllocator;
+use runtime_static::RuntimeStatic;
+use concurrency::spin_mutex::SpinMutex;
 
 /// This function is called on panic.
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
     loop {}
+}
+
+#[global_allocator]
+static GLOBAL_ALLOC : RuntimeStatic<SpinMutex<HeapAllocator>> = RuntimeStatic::get_uninit();
+//static GLOBAL_ALLOC : HeapAllocator = HeapAllocator;
+
+#[alloc_error_handler]
+fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
+    let _alloc = GLOBAL_ALLOC.lock();
+
+    panic!("Allocator failed to allocate: size: {}, align: {}", layout.size(), layout.align());
 }
 
 #[no_mangle]
@@ -82,7 +100,12 @@ pub extern "C" fn kernel_main(
     println!("");
     println!("Heap_Base: 0x{:X}", heap_kernel_bottom);
     println!("Heap_Limit: 0x{:X}", heap_kernel_top);
-    let heap_allocator = memory_manager::heap_allocator::HeapAllocator::new(heap_kernel_bottom, heap_kernel_top);
+
+    GLOBAL_ALLOC.init(
+        SpinMutex::new(HeapAllocator::new(heap_kernel_bottom, heap_kernel_top))
+    );
+
+    memory_manager::heap_allocator::tests::home_made_test();
 
     println!("");
 
