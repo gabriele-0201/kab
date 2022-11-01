@@ -181,3 +181,12 @@ impl MemoryManager {
     // + flush TLB
     // + enable paging
 }
+
+fn next_align<T>(elem: usize, align: usize) -> *mut T {
+    let elem = elem as *mut u8;
+    let pad = elem.align_offset(align);
+    if pad == usize::MAX {
+        panic!("Impossibel alignment");
+    }
+    ((elem as usize) + pad) as *mut T
+}
