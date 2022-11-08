@@ -23,7 +23,7 @@
 .section .bss
     // Prepare heap and stack space
     heap_bottom:
-        .skip 4 * 1024 // 4KiB
+        .skip 16 * 1024 // 16KiB
     heap_top:
     .align 16 // WHY?
     stack_bottom:

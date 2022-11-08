@@ -1,25 +1,22 @@
-use core::sync::atomic::{
-    Ordering,
-    AtomicBool
-};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 pub struct SpinMutex<T> {
     lock: AtomicBool,
-    data: T
+    data: T,
 }
 
 // should implement Deref and Drop
-// so every time the SpinGuard is dropped than the lock is free 
+// so every time the SpinGuard is dropped than the lock is free
 pub struct SpinGuard<'a, T> {
     lock: &'a AtomicBool,
-    data: *mut T
+    data: *mut T,
 }
 
 impl<T> SpinMutex<T> {
     pub fn new(data: T) -> Self {
         Self {
             lock: Default::default(), // false
-            data
+            data,
         }
     }
 
@@ -34,10 +31,10 @@ impl<T> SpinMutex<T> {
             core::hint::spin_loop();
         }
 
-        SpinGuard{
+        SpinGuard {
             lock: &self.lock,
             //data: &mut self.data as *mut T
-            data: &self.data as *const T as *mut T
+            data: &self.data as *const T as *mut T,
         }
     }
 }
@@ -62,5 +59,3 @@ impl<'a, T> core::ops::Drop for SpinGuard<'a, T> {
         self.lock.swap(false, Ordering::Relaxed);
     }
 }
-
-

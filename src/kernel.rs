@@ -4,29 +4,28 @@
 // TODO: remove this feature, used only once for stupid thing
 #![feature(pointer_byte_offsets)]
 
-            
 //core::arch::global_asm!(core::include_str!("start.s"), options(raw));
 //core::arch::global_asm!(include_str!("interrupt_handlers.s"), options(raw));
 
 // src/main.rs
 
-
-mod vga_buffer;
-mod init;
-mod gdt;
-mod port;
-mod interrupts;
-mod multiboot;
-mod memory_manager;
 mod concurrency;
+mod gdt;
+mod init;
+mod interrupts;
+mod memory_manager;
+mod multiboot;
+mod port;
 mod runtime_static;
+mod vga_buffer;
 
+#[macro_use]
 extern crate alloc;
 
+use concurrency::spin_mutex::SpinMutex;
 use core::panic::PanicInfo;
 use memory_manager::heap_allocator::HeapAllocator;
 use runtime_static::RuntimeStatic;
-use concurrency::spin_mutex::SpinMutex;
 
 /// This function is called on panic.
 #[panic_handler]
@@ -36,39 +35,41 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 #[global_allocator]
-static GLOBAL_ALLOC : RuntimeStatic<SpinMutex<HeapAllocator>> = RuntimeStatic::get_uninit();
-//static GLOBAL_ALLOC : HeapAllocator = HeapAllocator;
+static GLOBAL_ALLOC: RuntimeStatic<SpinMutex<HeapAllocator>> = RuntimeStatic::get_uninit();
 
 #[alloc_error_handler]
 fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     let _alloc = GLOBAL_ALLOC.lock();
 
-    panic!("Allocator failed to allocate: size: {}, align: {}", layout.size(), layout.align());
+    panic!(
+        "Allocator failed to allocate: size: {}, align: {}",
+        layout.size(),
+        layout.align()
+    );
 }
 
 #[no_mangle]
 pub extern "C" fn kernel_main(
-    multiboot_magic_number: usize, 
-    multiboot_information_address: usize, 
+    multiboot_magic_number: usize,
+    multiboot_information_address: usize,
     heap_kernel_bottom: usize,
     heap_kernel_top: usize,
-    stack_kernel_top: usize
+    stack_kernel_top: usize,
 ) -> ! {
-
     // vga_buffer::print_something();
-    
+
     // TODO manage better the lock, could couse dead lock
     //  + example: have something is blocking the WRTIER and a interrupt manager is called
     //  => this cause a dead lock because the interrupt will never find free the WRITER and the
     //  => previous will never finish using it
-    
+
     //vga_buffer::WRITER.lock().clear_screen();
     vga_buffer::Writer::init();
 
     println!("Vga Buffer Ready!");
-    
+
     // All of the following code should finish in some init wrapper
-    let gdt = gdt::GDT::new(); 
+    let gdt = gdt::GDT::new();
     gdt.load();
 
     println!("GDT loaded!");
@@ -81,7 +82,8 @@ pub extern "C" fn kernel_main(
     println!("Activation interrupts!");
     idt.enable();
 
-    let boot_info = multiboot::BootInfo::new(multiboot_magic_number, multiboot_information_address).unwrap();
+    let boot_info =
+        multiboot::BootInfo::new(multiboot_magic_number, multiboot_information_address).unwrap();
 
     /* IDK - for now simply use the stack_top as starting poitn
     println!("{:?}", boot_info);
@@ -101,9 +103,10 @@ pub extern "C" fn kernel_main(
     println!("Heap_Base: 0x{:X}", heap_kernel_bottom);
     println!("Heap_Limit: 0x{:X}", heap_kernel_top);
 
-    GLOBAL_ALLOC.init(
-        SpinMutex::new(HeapAllocator::new(heap_kernel_bottom, heap_kernel_top))
-    );
+    GLOBAL_ALLOC.init(SpinMutex::new(HeapAllocator::new(
+        heap_kernel_bottom,
+        heap_kernel_top,
+    )));
 
     memory_manager::heap_allocator::tests::home_made_test();
 
@@ -120,7 +123,9 @@ pub extern "C" fn kernel_main(
     let vga_virtual = memory_manager::paging::VirtualAddr::new(0x40000000);
     let vga_physical = memory_manager::paging::PhysicalAddr::new(0xb8000);
 
-    let switch_vga_buffer = |addr: usize| { unsafe { vga_buffer::WRITER.lock().change_ptr_buffer(addr); } };
+    let switch_vga_buffer = |addr: usize| unsafe {
+        vga_buffer::WRITER.lock().change_ptr_buffer(addr);
+    };
     switch_vga_buffer(vga_virtual.get());
     println!("Switched from 0xB8000 to 0x40000000!");
     switch_vga_buffer(vga_physical.get());

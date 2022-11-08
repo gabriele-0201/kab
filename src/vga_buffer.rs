@@ -1,7 +1,4 @@
-use super::{
-    concurrency::spin_mutex::SpinMutex,
-    runtime_static::RuntimeStatic
-};
+use super::{concurrency::spin_mutex::SpinMutex, runtime_static::RuntimeStatic};
 use core::fmt;
 
 #[allow(dead_code)]
@@ -45,7 +42,11 @@ pub struct ScreenChar {
 
 impl fmt::Display for ScreenChar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "character: {}, ColorCode: {:?}", self.ascii_character as char, self.color_code)
+        write!(
+            f,
+            "character: {}, ColorCode: {:?}",
+            self.ascii_character as char, self.color_code
+        )
     }
 }
 
@@ -66,25 +67,21 @@ pub struct Writer {
 }
 
 impl Writer {
-
     // This function will init the WRITER static variable
     pub fn init() {
-
         unsafe {
-            WRITER.init(
-                SpinMutex::new(Writer {
-                    column_position: 0,
-                    color_code: ColorCode::new(Color::Yellow, Color::Black),
-                    //buffer: &mut *(0xb8000 as *mut Buffer),
-                    buffer: 0xb8000 as *mut Buffer,
-                })
-            );
+            WRITER.init(SpinMutex::new(Writer {
+                column_position: 0,
+                color_code: ColorCode::new(Color::Yellow, Color::Black),
+                //buffer: &mut *(0xb8000 as *mut Buffer),
+                buffer: 0xb8000 as *mut Buffer,
+            }));
         }
     }
 
     // TEST
     pub fn change_ptr_buffer(&mut self, new_buffer_addr: usize) {
-        self.buffer = unsafe { &mut *(new_buffer_addr as *mut Buffer) } 
+        self.buffer = unsafe { &mut *(new_buffer_addr as *mut Buffer) }
     }
 
     pub fn get_buffer_addr(&self) -> usize {
@@ -104,13 +101,13 @@ impl Writer {
 
                 let color_code = self.color_code;
                 //unsafe{ *self.buffer }.chars[row][col].write(ScreenChar {
-                unsafe { 
+                unsafe {
                     core::ptr::write_volatile(
                         &mut ((*self.buffer).chars[row][col]) as *mut ScreenChar,
                         ScreenChar {
                             ascii_character: byte,
                             color_code,
-                        }
+                        },
                     );
                 };
                 /*
@@ -134,10 +131,11 @@ impl Writer {
                 */
                 unsafe {
                     let buffer = &mut *self.buffer;
-                    let character = core::ptr::read_volatile(&buffer.chars[row][col] as *const ScreenChar);
+                    let character =
+                        core::ptr::read_volatile(&buffer.chars[row][col] as *const ScreenChar);
                     core::ptr::write_volatile(
                         &mut (buffer.chars[row - 1][col]) as *mut ScreenChar,
-                        character
+                        character,
                     );
                 }
             }
@@ -157,14 +155,14 @@ impl Writer {
             unsafe {
                 core::ptr::write_volatile(
                     &mut ((*self.buffer).chars[row][col]) as *mut ScreenChar,
-                    blank
+                    blank,
                 );
             }
         }
     }
 
     pub fn clear_screen(&mut self) {
-        for i in 0 .. BUFFER_HEIGHT {
+        for i in 0..BUFFER_HEIGHT {
             self.clear_row(i);
         }
     }
@@ -177,10 +175,8 @@ impl Writer {
                 // not part of printable ASCII range
                 _ => self.write_byte(0xfe),
             }
-
         }
     }
-
 }
 
 impl fmt::Write for Writer {
@@ -217,15 +213,17 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-pub(crate) use println;
 pub(crate) use print;
+pub(crate) use println;
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     // This has to be unsafe until I find a way to have something static but
     // I can initialize on runtime
-    unsafe { WRITER.lock().write_fmt(args).unwrap(); }
+    unsafe {
+        WRITER.lock().write_fmt(args).unwrap();
+    }
 }
 
 /* OLD
