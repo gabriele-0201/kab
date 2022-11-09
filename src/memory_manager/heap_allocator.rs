@@ -188,34 +188,27 @@ impl HeapHead {
         }
         //crate::println!("YES");
 
-        if let From::HeapHead(heap_head) = from {
-            // Update the prev of the next HeapHead to the current if it is not a Tail or Base
-
-            // remember to update the From::HeapHead next to the just created HeapHead
-            (*heap_head).next = Near::HeapHead(new_heap_head_pos);
-        }
-
         let current_near_heap_head = Near::HeapHead(new_heap_head_pos);
         match from {
             From::HeapHead(heap_head) => {
                 // heap_head = A
                 // A <-> B => A <-> NEW <-> B
 
-                // for sure A.next now must become equal to the current new HeapHead
-                (&mut (*heap_head).next as *mut Near)
-                    .write_volatile(current_near_heap_head.clone());
-
                 // If A point to B than now B.prev have to be the current
                 if let Near::HeapHead(hh_ptr) = (*heap_head).next {
-                    (&mut (*hh_ptr).prev as *mut Near).write_volatile(current_near_heap_head);
+                    ((&mut (*hh_ptr).prev) as *mut Near)
+                        .write_volatile(current_near_heap_head.clone());
                 }
+
+                // for sure A.next now must become equal to the current new HeapHead
+                ((&mut (*heap_head).next) as *mut Near).write_volatile(current_near_heap_head);
             }
             From::VirtualAddr(_, ref next) => {
                 // next = A
                 // BASE <- A => BASE <- NEW <-> A
 
                 if let Near::HeapHead(hh_ptr) = *next {
-                    (&mut (*hh_ptr).prev as *mut Near).write_volatile(current_near_heap_head);
+                    ((&mut (*hh_ptr).prev) as *mut Near).write_volatile(current_near_heap_head);
                 }
             }
         }
@@ -254,6 +247,7 @@ impl core::fmt::Debug for HeapHead {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let padding = self.allocated_space as usize
             - (self as *const HeapHead as usize + size_of::<HeapHead>() as usize);
+        /*
         write!(
             f,
             "HeapHead pos: 0x{:X}, prev: {:?}, next: {:?} \n\
@@ -265,7 +259,15 @@ impl core::fmt::Debug for HeapHead {
             self.allocated_space as usize,
             padding
         )
-        //write!(f, "Space handled -> dim: {}", self.dim)
+        */
+        write!(f, "Space handled -> dim: {}", self.dim)
+        /*
+        write!(
+            f,
+            "HeapHead pos: 0x{:X}, prev: {:?}, next: {:?}",
+            self as *const HeapHead as usize, self.prev, self.next
+        )
+        */
     }
 }
 
@@ -316,20 +318,25 @@ unsafe impl GlobalAlloc for HeapAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         macro_rules! try_insert_from_start_heap {
             ($next: expr) => {
-                let new_head_head = match HeapHead::try_insert(
+                match HeapHead::try_insert(
                     From::VirtualAddr(self.start_heap.clone(), $next),
                     layout,
                 ) {
-                    Ok(new_head_head) => new_head_head,
-                    Err(_) => return core::ptr::null_mut(),
+                    Ok(new_head_head) => {
+                        //crate::println!("Head of heap heads: {:?}", *self.head_of_heap_head.get());
+                        (self.head_of_heap_head.get() as *mut Option<*mut HeapHead>)
+                            .write_volatile(Some(new_head_head as *mut HeapHead));
+                        //crate::println!("Head of heap heads: {:?}", *self.head_of_heap_head.get());
+                        let new_head_head = unsafe { &*new_head_head };
+                        return new_head_head.allocated_space;
+                    }
+                    Err(_) => () // if impossible insert from here no prob, go on
                 };
-                *self.head_of_heap_head.get() = Some(new_head_head as *mut HeapHead);
-                let new_head_head = unsafe { &*new_head_head };
-                return new_head_head.allocated_space
             };
         }
         // layout should not be 0 and must be a power of 2
         if (*self.head_of_heap_head.get()).is_none() {
+            //crate::println!("Insert with NO element inside");
             try_insert_from_start_heap!(Near::Tail(self.end_heap.clone()));
         }
 
@@ -340,6 +347,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
             .expect("Something break in HeapAllocator, Head of heap_heads is null");
         if self.start_heap.get() != hohh as usize {
             //panic!("Insert from base_heap should not be possible, not managed dealloc yet");
+            //crate::println!("Insert from the beginnign");
             try_insert_from_start_heap!(Near::HeapHead(hohh));
         }
 
@@ -351,6 +359,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
             let heap_head = unsafe { &mut *heap_head };
 
             // not sure if is possible to modify the stufff inside the iterator
+            //crate::println!("test inserting");
             if let Ok(heap_head) = HeapHead::try_insert(From::HeapHead(heap_head), layout) {
                 //crate::println!("Should be insered correctly");
                 let heap_head = unsafe { &*heap_head };
@@ -372,16 +381,23 @@ unsafe impl GlobalAlloc for HeapAllocator {
         if layout.size() != heap_head.dim
             || heap_head.allocated_space.align_offset(layout.align()) != 0
         {
+            //panic!("LLLOOLLLL");
             crate::handle_alloc_error(layout);
         }
 
         let to_update_next = heap_head.next.clone();
+        //crate::println!("to_update_next: {:?}", to_update_next);
         let to_update_prev = heap_head.prev.clone();
+        //crate::println!("to_update_prev: {:?}", to_update_prev);
 
-        if let Near::Tail(_) = to_update_next {
-            if let Near::Base(_) = to_update_prev {
-                *self.head_of_heap_head.get() = None;
-                return;
+        if let Near::Base(_) = to_update_prev {
+            match to_update_next {
+                Near::Tail(_) => (self.head_of_heap_head.get() as *mut Option<*mut HeapHead>)
+                    .write_volatile(None),
+                Near::HeapHead(hh_ptr) => (self.head_of_heap_head.get()
+                    as *mut Option<*mut HeapHead>)
+                    .write_volatile(Some(hh_ptr)),
+                _ => panic!("to_update_next can't be a Base"),
             }
         }
 
@@ -436,30 +452,40 @@ pub mod tests {
                 for (i, h) in hhof.into_iter().enumerate() {
                     println!("{} -> {:?}", i, *h);
                 }
-                //println!("");
+                println!("");
             };
 
-            let alloc_and_print = |size: usize, align: usize| -> *mut u8 {
+            let alloc = |size: usize, align: usize| -> *mut u8 {
                 let ptr = GLOBAL_ALLOC.alloc(
                     Layout::from_size_align(size, align).expect("This creation should not fail"),
                 );
-                print_allocated_spaces();
+                if ptr.is_null() {
+                    panic!("ALLOCATION GONE WRONG");
+                }
+                //print_allocated_spaces();
                 ptr
             };
 
-            alloc_and_print(3, 2);
-            alloc_and_print(5, 4);
-            alloc_and_print(5, 4);
-            alloc_and_print(9, 8);
+            // allocate for blocks
+            let start_allocation = alloc(3, 2);
+            let middle_1_allocation = alloc(5, 4);
+            let middle_2_allocation = alloc(6, 4);
+            let end_allocation = alloc(9, 8);
 
-            //let start_allocation = alloc_and_print(3, 2);
-            //let middle_1_allocation = alloc_and_print(5, 4);
-            //let middle_2_allocation = alloc_and_print(5, 4);
-            //let end_allocation = alloc_and_print(9, 8);
+            print_allocated_spaces();
 
-            println!("FINISH ALLOCATION");
+            println!("FINISH ALLOCATION, now start deallocation");
 
-            /*
+            // deallocate the firs one
+            GLOBAL_ALLOC.dealloc(
+                start_allocation,
+                Layout::from_size_align(3, 2).expect("This creation should not fail"),
+            );
+            print_allocated_spaces();
+
+            let start_allocation = alloc(3, 2);
+            print_allocated_spaces();
+
             GLOBAL_ALLOC.dealloc(
                 middle_1_allocation,
                 Layout::from_size_align(5, 4).expect("This creation should not fail"),
@@ -477,37 +503,35 @@ pub mod tests {
             print_allocated_spaces();
             GLOBAL_ALLOC.dealloc(
                 middle_2_allocation,
-                Layout::from_size_align(5, 4).expect("This creation should not fail"),
+                Layout::from_size_align(6, 4).expect("This creation should not fail"),
             );
             print_allocated_spaces();
-            */
         }
 
         println!("Allocation layouts test OK");
 
-        /*
-        let new_box = Box::new(1);
+        let new_box = alloc::boxed::Box::new(1);
         assert_eq!(1, *new_box);
         println!("Box test OK");
 
-
-        let n = 100;
+        let n = 1000;
         let mut vec = alloc::vec::Vec::new();
         for i in 0..n {
             vec.push(i);
         }
-        assert_eq!(vec.iter().sum::<u16>(), (n-1)*n/2);
+        assert_eq!(vec.iter().sum::<u32>(), (n - 1) * n / 2);
         println!("Vec test OK");
 
         crate::print!("test print vec: ");
-        vec.iter().for_each(|i| crate::print!("{}", i) );
+        vec.iter().for_each(|i| crate::print!("{}", i));
         crate::println!("");
 
         let str = alloc::string::String::from("Test");
         crate::println!("{}", str);
         let str_2 = alloc::string::String::from(" - format test");
         crate::println!("{}", format!("{}{}", str, str_2));
-        */
+
+        println!("Allocation test FINISHED");
     }
 }
 
