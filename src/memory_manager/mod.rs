@@ -25,8 +25,8 @@ pub struct MemoryManager {
 }
 
 impl MemoryManager {
-    pub fn new(starting_point: usize, boot_info: &BootInfo) -> Self {
-        let mut frame_allocator = FrameAllocator::new(starting_point, boot_info);
+    pub fn new(boot_info: &BootInfo) -> Self {
+        let mut frame_allocator = FrameAllocator::new(boot_info);
 
         // Now what should be done?
         // Should be allocated a new PageDirectory

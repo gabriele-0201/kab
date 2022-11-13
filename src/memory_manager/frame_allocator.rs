@@ -1,4 +1,5 @@
 use super::*;
+use core::alloc::{GlobalAlloc, Layout};
 
 // Start allocating frame from stack_top + stack_frame_max
 
@@ -89,7 +90,7 @@ pub struct FrameAllocator {
 
 impl FrameAllocator {
     // create a new frame allocator object and a stack to manage it
-    pub fn new(starting_point: usize, boot_info: &BootInfo) -> FrameAllocator {
+    pub fn new(boot_info: &BootInfo) -> FrameAllocator {
         // Extract the number of total frame
         // mem_upper and lower are in kilobytes
         let total_memory = 0x100000
@@ -104,8 +105,22 @@ impl FrameAllocator {
         // starting from the starting_point we need to reserve the space for a stack
         // this stack will manage all the deallocate frame
         // the dimension of the stack is number of frame and each is described with an usize
-        let stack_top =
-            unsafe { (starting_point + (max_frame * core::mem::size_of::<usize>())) as *mut usize };
+
+        // OLD
+        //let stack_top =
+        //unsafe { (starting_point + (max_frame * core::mem::size_of::<usize>())) as *mut usize };
+
+        let stack_size = max_frame * core::mem::size_of::<usize>();
+        let stack_top = unsafe {
+            crate::GLOBAL_ALLOC.alloc(
+                Layout::from_size_align(stack_size, 4)
+                    .expect("Layout creation for frame allocato failed"),
+            )
+        } as *mut usize;
+
+        if stack_top.is_null() {
+            panic!("This allocation cannot fail");
+        }
 
         let stack = Stack::new(stack_top);
 

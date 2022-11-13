@@ -100,6 +100,8 @@ pub extern "C" fn kernel_main(
 
     // Init heap
     println!("");
+    println!("heap base: 0x{:X}", heap_kernel_bottom);
+    println!("heap top: 0x{:X}", heap_kernel_top);
 
     GLOBAL_ALLOC.init(SpinMutex::new(HeapAllocator::new(
         heap_kernel_bottom,
@@ -112,7 +114,7 @@ pub extern "C" fn kernel_main(
     println!("");
 
     // Init memory manager (enable paging)
-    let mut memory_manager = memory_manager::MemoryManager::new(heap_kernel_top, &boot_info);
+    let mut memory_manager = memory_manager::MemoryManager::new(&boot_info);
 
     println!("Paging Enabled!");
     println!("");

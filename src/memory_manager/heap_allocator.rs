@@ -75,6 +75,17 @@ enum From {
     VirtualAddr(VirtualAddr, Near),
 }
 
+impl core::fmt::Debug for From {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            From::HeapHead(prev_hh) => write!(f, "prev heap_head: 0x{:X}", *prev_hh as usize),
+            From::VirtualAddr(addr, next) => {
+                write!(f, "Addr: 0x{}, Next: {:?}", addr, next)
+            }
+        }
+    }
+}
+
 impl HeapHead {
     /// this function is similar to a constructor with the only difference that
     /// does not return a new HeapHead but write it on the passed address with
@@ -111,6 +122,7 @@ impl HeapHead {
     /// this function will carry about padding and HeapHead's linked list
     /// management
     unsafe fn try_insert(from: From, layout: Layout) -> Result<*const HeapHead, &'static str> {
+        //crate::println!("from: {:?} - layout {:?}", from, layout);
         // TODO maybe a simple check at the beginnign could make a lot faster the
         // iteration through all the stuff
 
@@ -328,21 +340,24 @@ unsafe impl GlobalAlloc for HeapAllocator {
                             .write_volatile(Some(new_head_head as *mut HeapHead));
                         //crate::println!("Head of heap heads: {:?}", *self.head_of_heap_head.get());
                         let new_head_head = unsafe { &*new_head_head };
-                        return new_head_head.allocated_space;
-                    }
-                    Err(_) => () // if impossible insert from here no prob, go on
-                };
+                        return new_head_head.allocated_space
+                    },
+                    // Impossible insert from here
+                    Err(_) => ()
+                }
             };
         }
+
         // layout should not be 0 and must be a power of 2
         if (*self.head_of_heap_head.get()).is_none() {
             //crate::println!("Insert with NO element inside");
             try_insert_from_start_heap!(Near::Tail(self.end_heap.clone()));
+            // If I cannot insert in an empty heap than I return null_mut
+            return core::ptr::null_mut();
         }
 
         // here now we have to make sure that the first heap_head is at the start,
         // oherwise check if is possible to create a new head_of_heap_heads
-        // TODO: test this when also dealloc is done
         let hohh = (*self.head_of_heap_head.get())
             .expect("Something break in HeapAllocator, Head of heap_heads is null");
         if self.start_heap.get() != hohh as usize {
@@ -413,6 +428,21 @@ unsafe impl GlobalAlloc for HeapAllocator {
 
 unsafe impl GlobalAlloc for RuntimeStatic<SpinMutex<HeapAllocator>> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        loop {
+            let hhof = match self.get_head_of_heap_heads() {
+                Some(ptr) => unsafe { &mut *ptr },
+                None => {
+                    crate::println!("EMPTY heap heads list");
+                    break;
+                }
+            };
+            for (i, h) in hhof.into_iter().enumerate() {
+                let h = unsafe { &*h };
+                crate::println!("{} -> {:?}", i, h);
+            }
+            crate::println!("");
+            break;
+        }
         self.lock().alloc(layout)
     }
 
@@ -535,6 +565,12 @@ pub mod tests {
 
             print_allocated_spaces();
         }
+
+        print_allocated_spaces();
+
+        let new_box = alloc::boxed::Box::new("ciao");
+        assert_eq!("ciao", *new_box);
+        println!("Box test OK");
 
         print_allocated_spaces();
 

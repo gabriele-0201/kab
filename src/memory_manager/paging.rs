@@ -60,6 +60,12 @@ impl fmt::Display for VirtualAddr {
     }
 }
 
+impl fmt::Debug for VirtualAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "virtual: 0x{:X} ", self.0)
+    }
+}
+
 // DIRECTORY
 //
 // There is problem with the movement of the PageDirectory?

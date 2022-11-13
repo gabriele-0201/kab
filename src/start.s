@@ -24,10 +24,10 @@
     // Prepare heap and stack space
     .align 16 // WHY?
     stack_bottom:
-        .skip 1048576 * 1 // 1MB <- why not 1024*1024?
+        .skip 1 * 1024 * 1024 // 1MB
     stack_top:
     heap_bottom:
-        .skip 16 * 1024 // 16KiB
+        .skip 1 * 1024 * 1024 // 1MB
     heap_top:
 
 .section .text
