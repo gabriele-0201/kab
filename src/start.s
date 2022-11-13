@@ -22,13 +22,13 @@
 // data initialized to zeros when the kernel is loaded
 .section .bss
     // Prepare heap and stack space
-    heap_bottom:
-        .skip 16 * 1024 // 16KiB
-    heap_top:
     .align 16 // WHY?
     stack_bottom:
         .skip 1048576 * 1 // 1MB <- why not 1024*1024?
     stack_top:
+    heap_bottom:
+        .skip 16 * 1024 // 16KiB
+    heap_top:
 
 .section .text
 .global start

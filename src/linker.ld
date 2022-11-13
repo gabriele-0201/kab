@@ -43,4 +43,6 @@ SECTIONS
 		*(COMMON)
 		*(.bss)
 	}
+
+    /DISCARD/ : { *(.fini_array*) *(.comment) }
 }

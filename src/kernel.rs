@@ -100,28 +100,44 @@ pub extern "C" fn kernel_main(
 
     // Init heap
     println!("");
-    println!("Heap_Base: 0x{:X}", heap_kernel_bottom);
-    println!("Heap_Limit: 0x{:X}", heap_kernel_top);
 
     GLOBAL_ALLOC.init(SpinMutex::new(HeapAllocator::new(
         heap_kernel_bottom,
         heap_kernel_top,
     )));
+    println!("Initialized Heap Allocator!");
 
-    memory_manager::heap_allocator::tests::home_made_test();
+    //memory_manager::heap_allocator::tests::home_made_test();
 
     println!("");
 
     // Init memory manager (enable paging)
-    let memory_manager = memory_manager::MemoryManager::new(stack_kernel_top, &boot_info);
+    let mut memory_manager = memory_manager::MemoryManager::new(heap_kernel_top, &boot_info);
 
     println!("Paging Enabled!");
     println!("");
     println!("Testing Paging switching vga_buffer pointer!");
 
+    use memory_manager::paging::{PageDirectoryFlag, PageTableFlag, PhysicalAddr, VirtualAddr};
+    let virtual_vga_buffer = VirtualAddr::new(0x40000000);
+    let physical_vga_buffer = PhysicalAddr::new(0xb8000);
+
+    memory_manager
+        .map_addr_without_paging(
+            virtual_vga_buffer.clone(),
+            physical_vga_buffer,
+            PageDirectoryFlag::Present as u32
+                | PageDirectoryFlag::Writable as u32
+                | PageDirectoryFlag::NotCacheable as u32,
+            PageTableFlag::Present as u32
+                | PageTableFlag::Writable as u32
+                | PageTableFlag::NotCacheable as u32,
+        )
+        .expect("Impossible address mapping");
+
     // There is a mapping from 0x40000000 to 0xb8000 inside the memory_manager constructor
-    let vga_virtual = memory_manager::paging::VirtualAddr::new(0x40000000);
-    let vga_physical = memory_manager::paging::PhysicalAddr::new(0xb8000);
+    let vga_virtual = VirtualAddr::new(0x40000000);
+    let vga_physical = PhysicalAddr::new(0xb8000);
 
     let switch_vga_buffer = |addr: usize| unsafe {
         vga_buffer::WRITER.lock().change_ptr_buffer(addr);

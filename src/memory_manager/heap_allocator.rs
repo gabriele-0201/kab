@@ -438,22 +438,23 @@ pub mod tests {
 
         //println!("HeapHead dimension: {}", size_of::<super::HeapHead>());
 
+        let print_allocated_spaces = || {
+            let hhof = match GLOBAL_ALLOC.get_head_of_heap_heads() {
+                Some(ptr) => unsafe { &mut *ptr },
+                None => {
+                    println!("EMPTY heap heads list");
+                    return;
+                }
+            };
+            for (i, h) in hhof.into_iter().enumerate() {
+                let h = unsafe { &*h };
+                println!("{} -> {:?}", i, h);
+            }
+            println!("");
+        };
+
         unsafe {
             // use a differenst scope to drop GLOBAL_ALLOC, otherwise could couse a dead_lock
-
-            let print_allocated_spaces = || {
-                let hhof = match GLOBAL_ALLOC.get_head_of_heap_heads() {
-                    Some(ptr) => &mut *ptr,
-                    None => {
-                        println!("EMPTY heap heads list");
-                        return;
-                    }
-                };
-                for (i, h) in hhof.into_iter().enumerate() {
-                    println!("{} -> {:?}", i, *h);
-                }
-                println!("");
-            };
 
             let alloc = |size: usize, align: usize| -> *mut u8 {
                 let ptr = GLOBAL_ALLOC.alloc(
@@ -510,26 +511,32 @@ pub mod tests {
 
         println!("Allocation layouts test OK");
 
-        let new_box = alloc::boxed::Box::new(1);
-        assert_eq!(1, *new_box);
-        println!("Box test OK");
+        {
+            let new_box = alloc::boxed::Box::new(1);
+            assert_eq!(1, *new_box);
+            println!("Box test OK");
 
-        let n = 1000;
-        let mut vec = alloc::vec::Vec::new();
-        for i in 0..n {
-            vec.push(i);
+            let n = 1000;
+            let mut vec = alloc::vec::Vec::new();
+            for i in 0..n {
+                vec.push(i);
+            }
+            assert_eq!(vec.iter().sum::<u32>(), (n - 1) * n / 2);
+            println!("Vec test OK");
+
+            crate::print!("test print vec: ");
+            vec.iter().for_each(|i| crate::print!("{}", i));
+            crate::println!("");
+
+            let str = alloc::string::String::from("Test");
+            crate::println!("{}", str);
+            let str_2 = alloc::string::String::from(" - format test");
+            crate::println!("{}", format!("{}{}", str, str_2));
+
+            print_allocated_spaces();
         }
-        assert_eq!(vec.iter().sum::<u32>(), (n - 1) * n / 2);
-        println!("Vec test OK");
 
-        crate::print!("test print vec: ");
-        vec.iter().for_each(|i| crate::print!("{}", i));
-        crate::println!("");
-
-        let str = alloc::string::String::from("Test");
-        crate::println!("{}", str);
-        let str_2 = alloc::string::String::from(" - format test");
-        crate::println!("{}", format!("{}{}", str, str_2));
+        print_allocated_spaces();
 
         println!("Allocation test FINISHED");
     }
