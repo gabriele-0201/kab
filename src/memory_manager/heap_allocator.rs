@@ -17,7 +17,7 @@ use core::{
 /// head_of_heap_head is None so the thing to do is: set a new HeapHead
 /// at the beginning of the heap (always with a dimension check)
 ///
-///
+/// ----aligned--|heap_head| ---aling |offset|allocated_space|    |next_heap_head|...
 pub struct HeapAllocator {
     start_heap: VirtualAddr,
     head_of_heap_head: UnsafeCell<Option<*mut HeapHead>>,

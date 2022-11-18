@@ -19,6 +19,7 @@ extern "C" {
     //pub fn flush_tlb_entry(virtual_addr_ptr: usize);
 }
 
+// PD(2^10 entry = 1024) -> PT(2^10 entry = 1024) -> offset(2^12)
 pub struct MemoryManager {
     page_directory: PageDirectory,
     frame_allocator: FrameAllocator,
@@ -56,26 +57,7 @@ impl MemoryManager {
 
         // create a new page directory
         let mut page_directory = PageDirectory::new(&mut frame_allocator);
-
-        // setting up identity paging
-        let mut identity_table = page_directory
-            .alloc_new_page_table(
-                &mut frame_allocator,
-                0,
-                PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32,
-            )
-            .expect("Impossible allocate page table");
-
-        for i in 0..ENTRIES_PER_PAGE {
-            // loop for 1024 page - frame
-            let frame = Frame::from_frame_number(i);
-
-            identity_table[i].add_attribute(PageTableFlag::Present as u32);
-            identity_table[i].add_attribute(PageTableFlag::Writable as u32);
-            identity_table[i].add_attribute(PageTableFlag::NotCacheable as u32);
-            identity_table[i].set_frame(frame);
-        }
-
+        /*
         // HHF : 0x10000000 => 0xC0000000
         let virtual_addr_map_kernel = VirtualAddr::new(0xC0000000);
         let mut hhf_table = page_directory
@@ -102,20 +84,52 @@ impl MemoryManager {
             hhf_table[index_in_the_table].add_attribute(PageTableFlag::Writable as u32);
             hhf_table[index_in_the_table].set_frame(frame);
         }
-
-        unsafe {
-            // Change pd
-            change_page_directory(page_directory.get_physical_addr().get());
-
-            // enable paging
-            enable_paging();
-        }
+        */
 
         Self {
             page_directory,
             frame_allocator,
         }
         //m
+    }
+
+    pub unsafe fn enable_paging(&self) {
+        // Change pd
+        change_page_directory(self.page_directory.get_physical_addr().get());
+        // enable paging
+        enable_paging();
+    }
+
+    pub fn set_up_identity_paging(&mut self, to_limit: usize) -> Result<(), &'static str> {
+        // TODO evaluation, if to_limit goes over 1GiB LHK is no more respected
+        // always identity mapping one page more
+        //crate::println!("limit: {}", to_limit);
+        let needed_pd = (to_limit / (ENTRIES_PER_PAGE * PAGE_SIZE)) + 1;
+        //crate::println!("total pd: {}", needed_pd);
+
+        for i_pd in 0..needed_pd {
+            // setting up identity paging
+            let mut identity_table = self.page_directory.alloc_new_page_table(
+                &mut self.frame_allocator,
+                i_pd,
+                PageDirectoryFlag::Present as u32 | PageDirectoryFlag::Writable as u32,
+            )?;
+            //crate::println!("PD {}", i_pd);
+
+            for i_pt in 0..ENTRIES_PER_PAGE {
+                //crate::println!("PT {}", i_pt);
+                // loop for 1024 page - frame
+                let frame = Frame::from_frame_number((i_pd * ENTRIES_PER_PAGE) + i_pt);
+                //crate::println!("Used frame {}", (i_pd * ENTRIES_PER_PAGE) + i_pt);
+
+                identity_table[i_pt].add_attribute(PageTableFlag::Present as u32);
+                identity_table[i_pt].add_attribute(PageTableFlag::Writable as u32);
+                identity_table[i_pt].add_attribute(PageTableFlag::NotCacheable as u32);
+                identity_table[i_pt].set_frame(frame);
+            }
+        }
+
+        Ok(())
     }
 
     pub fn switch_page_directory(&mut self, new_pd: *mut PageDirectory) {
@@ -172,7 +186,7 @@ impl MemoryManager {
     // TODO:
     // + map virtual addr to physical addr
     // + flush TLB
-    // + enable paging
+    // + switch page_directory
 }
 
 fn next_align<T>(elem: usize, align: usize) -> *mut T {

@@ -115,6 +115,14 @@ pub extern "C" fn kernel_main(
 
     // Init memory manager (enable paging)
     let mut memory_manager = memory_manager::MemoryManager::new(&boot_info);
+    // TODO change witha  lamda
+    match memory_manager.set_up_identity_paging(heap_kernel_top) {
+        Ok(_) => (),
+        Err(msg) => panic!("{}", msg),
+    };
+    unsafe {
+        memory_manager.enable_paging();
+    }
 
     println!("Paging Enabled!");
     println!("");

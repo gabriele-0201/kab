@@ -93,6 +93,8 @@ impl FrameAllocator {
     pub fn new(boot_info: &BootInfo) -> FrameAllocator {
         // Extract the number of total frame
         // mem_upper and lower are in kilobytes
+
+        // FOR now qemu give only 500MiB of memory
         let total_memory = 0x100000
             + (boot_info
                 .mem_upper
@@ -100,6 +102,7 @@ impl FrameAllocator {
                 * 0x400);
         //crate::println!("tot mem: {}", total_memory);
         let max_frame = total_memory / FRAME_SIZE;
+        //crate::println!("max frame {}", max_frame);
 
         // set up the stack ptr
         // starting from the starting_point we need to reserve the space for a stack

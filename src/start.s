@@ -27,7 +27,7 @@
         .skip 1 * 1024 * 1024 // 1MB
     stack_top:
     heap_bottom:
-        .skip 1 * 1024 * 1024 // 1MB
+        .skip 16 * 1024 * 1024 // 16MB
     heap_top:
 
 .section .text
